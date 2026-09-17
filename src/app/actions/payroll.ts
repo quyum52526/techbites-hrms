@@ -1,8 +1,21 @@
 "use server";
 
+import { AttendanceStatus, EmployeeStatus, PayrollStatus, Role } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
-import { getActiveCompanyId } from "@/lib/company";
+import { getActiveUser } from "@/lib/auth";
+import { getActiveCompanyId, employeeScope } from "@/lib/company";
+import { calculatePayroll, isValidPeriod, periodDateRange, periodLabel } from "@/lib/payroll";
+
+export type PayrollActionResult = { ok: true; message: string } | { ok: false; error: string };
+
+async function requirePayrollAdmin() {
+  const user = await getActiveUser();
+  if (user.role !== Role.SUPER_ADMIN && user.role !== Role.HR_ADMIN) {
+    throw new Error("You do not have permission to manage payroll");
+  }
+  return user;
+}
 
 /** Blocks payroll changes for employees outside the company selected in the switcher. */
 async function getEmployeeInActiveCompany(employeeId: string) {
@@ -17,57 +30,166 @@ async function getEmployeeInActiveCompany(employeeId: string) {
   return employee;
 }
 
-export async function setSalaryStructure(formData: FormData) {
-  const employeeId = formData.get("employeeId") as string;
-  const basicSalary = parseFloat(formData.get("basicSalary") as string);
-  const houseRent = parseFloat((formData.get("houseRent") as string) || "0");
-  const medicalAllow = parseFloat((formData.get("medicalAllow") as string) || "0");
-  const taxDeduction = parseFloat((formData.get("taxDeduction") as string) || "0");
+const amount = (formData: FormData, key: string) => {
+  const value = parseFloat((formData.get(key) as string) || "0");
+  if (isNaN(value) || value < 0) throw new Error(`Invalid amount for ${key}`);
+  return value;
+};
 
-  if (!employeeId || isNaN(basicSalary)) throw new Error("Invalid salary parameters");
+export async function setSalaryStructure(formData: FormData) {
+  await requirePayrollAdmin();
+
+  const employeeId = formData.get("employeeId") as string;
+  if (!employeeId || !formData.get("basicSalary")) throw new Error("Invalid salary parameters");
+
+  const salary = {
+    basicSalary: amount(formData, "basicSalary"),
+    houseRent: amount(formData, "houseRent"),
+    medicalAllow: amount(formData, "medicalAllow"),
+    otherAllow: amount(formData, "otherAllow"),
+    taxDeduction: amount(formData, "taxDeduction"),
+    providentFund: amount(formData, "providentFund"),
+  };
   await getEmployeeInActiveCompany(employeeId);
 
   await prisma.salaryStructure.upsert({
     where: { employeeId },
-    create: { employeeId, basicSalary, houseRent, medicalAllow, taxDeduction },
-    update: { basicSalary, houseRent, medicalAllow, taxDeduction },
+    create: { employeeId, ...salary },
+    update: salary,
   });
 
   revalidatePath("/dashboard/payroll");
 }
 
-export async function generatePayslip(employeeId: string, month: string) {
-  const employee = await getEmployeeInActiveCompany(employeeId);
+/**
+ * Generates (or regenerates) payroll for every active employee with a salary structure.
+ * - Scope: `companyId`, else the company selected in the top bar, else all companies.
+ * - Records already marked PAID are left untouched, so re-running a month is safe.
+ * - Late/absent fines come from that month's attendance records (see PAYROLL_POLICY).
+ */
+export async function generatePayroll(month: number, year: number, companyId?: string): Promise<PayrollActionResult> {
+  await requirePayrollAdmin();
 
-  const structure = await prisma.salaryStructure.findUnique({ where: { employeeId } });
-  if (!structure) throw new Error("Salary structure not defined for employee");
+  const period = { month, year };
+  if (!isValidPeriod(period)) return { ok: false, error: "Choose a valid payroll month" };
 
-  const allowances = structure.houseRent + structure.medicalAllow + structure.otherAllow;
-  const deductions = structure.taxDeduction;
-  const netSalary = structure.basicSalary + allowances - deductions;
+  const activeCompanyId = await getActiveCompanyId();
+  if (companyId && activeCompanyId && companyId !== activeCompanyId) {
+    return { ok: false, error: "That company is not the one selected in the top bar" };
+  }
+  const scopeCompanyId = companyId ?? activeCompanyId;
+  if (scopeCompanyId) {
+    const company = await prisma.company.findUnique({ where: { id: scopeCompanyId }, select: { id: true } });
+    if (!company) return { ok: false, error: "Selected company no longer exists" };
+  }
 
-  // companyId is snapshotted so historic payslips stay with the company that paid them.
-  await prisma.payrollRecord.upsert({
-    where: { employeeId_month: { employeeId, month } },
-    create: {
-      employeeId,
-      companyId: employee.companyId,
-      month,
-      basicSalary: structure.basicSalary,
-      allowances,
-      deductions,
-      netSalary,
-      status: "GENERATED",
+  const label = periodLabel(period);
+  const { start, end } = periodDateRange(period);
+
+  const employees = await prisma.employee.findMany({
+    where: {
+      ...employeeScope(scopeCompanyId),
+      status: { notIn: [EmployeeStatus.TERMINATED, EmployeeStatus.RESIGNED] },
+      joiningDate: { lt: new Date(end.getTime() + 24 * 60 * 60 * 1000) },
     },
-    update: {
-      companyId: employee.companyId,
-      basicSalary: structure.basicSalary,
-      allowances,
-      deductions,
-      netSalary,
-      status: "GENERATED",
+    select: { id: true, companyId: true, salaryStructure: true },
+  });
+
+  const payable = employees.filter((e) => e.salaryStructure);
+  const missingSalary = employees.length - payable.length;
+  if (payable.length === 0) {
+    return {
+      ok: false,
+      error: employees.length === 0
+        ? `No active employees found for ${label}`
+        : `None of the ${employees.length} active employee(s) have a salary structure yet`,
+    };
+  }
+
+  const employeeIds = payable.map((e) => e.id);
+  const [paidRecords, attendanceCounts] = await Promise.all([
+    prisma.payrollRecord.findMany({
+      where: { month: label, employeeId: { in: employeeIds }, status: PayrollStatus.PAID },
+      select: { employeeId: true },
+    }),
+    prisma.attendanceRecord.groupBy({
+      by: ["employeeId", "status"],
+      where: {
+        employeeId: { in: employeeIds },
+        date: { gte: start, lte: end },
+        status: { in: [AttendanceStatus.LATE, AttendanceStatus.ABSENT] },
+      },
+      _count: { _all: true },
+    }),
+  ]);
+
+  const paid = new Set(paidRecords.map((r) => r.employeeId));
+  const countFor = (employeeId: string, status: AttendanceStatus) =>
+    attendanceCounts.find((c) => c.employeeId === employeeId && c.status === status)?._count._all ?? 0;
+
+  const toGenerate = payable.filter((e) => !paid.has(e.id));
+  await prisma.$transaction(
+    async (tx) => {
+      for (const employee of toGenerate) {
+        const data = {
+          ...calculatePayroll(employee.salaryStructure!, {
+            lateDays: countFor(employee.id, AttendanceStatus.LATE),
+            absentDays: countFor(employee.id, AttendanceStatus.ABSENT),
+          }),
+          // companyId is snapshotted so historic pay-slips stay with the company that paid them.
+          companyId: employee.companyId,
+          status: PayrollStatus.GENERATED,
+          paymentDate: null,
+        };
+        await tx.payrollRecord.upsert({
+          where: { employeeId_month: { employeeId: employee.id, month: label } },
+          create: { employeeId: employee.id, month: label, ...data },
+          update: data,
+        });
+      }
+    },
+    { timeout: 120_000, maxWait: 10_000 }
+  );
+
+  revalidatePath("/dashboard/payroll");
+  revalidatePath("/dashboard/reports");
+
+  const notes = [
+    paid.size > 0 && `${paid.size} already paid (unchanged)`,
+    missingSalary > 0 && `${missingSalary} skipped — no salary structure`,
+  ].filter(Boolean);
+  return {
+    ok: true,
+    message: `Generated ${toGenerate.length} pay-slip(s) for ${label}${notes.length ? ` · ${notes.join(" · ")}` : ""}`,
+  };
+}
+
+export async function updatePayrollStatus(recordId: string, status: PayrollStatus): Promise<PayrollActionResult> {
+  await requirePayrollAdmin();
+  if (!Object.values(PayrollStatus).includes(status)) return { ok: false, error: "Unknown payroll status" };
+
+  const [record, activeCompanyId] = await Promise.all([
+    prisma.payrollRecord.findUnique({
+      where: { id: recordId },
+      select: { status: true, paymentDate: true, companyId: true, employee: { select: { companyId: true } } },
+    }),
+    getActiveCompanyId(),
+  ]);
+  if (!record) return { ok: false, error: "Payroll record not found" };
+  if (activeCompanyId && (record.companyId ?? record.employee.companyId) !== activeCompanyId) {
+    return { ok: false, error: "This payroll record belongs to a different company" };
+  }
+
+  await prisma.payrollRecord.update({
+    where: { id: recordId },
+    data: {
+      status,
+      // Keep the original payment date if it was already paid; clear it when un-marking.
+      paymentDate: status === PayrollStatus.PAID ? record.paymentDate ?? new Date() : null,
     },
   });
 
   revalidatePath("/dashboard/payroll");
+  revalidatePath("/dashboard/reports");
+  return { ok: true, message: `Marked as ${status}` };
 }

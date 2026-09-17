@@ -38,3 +38,24 @@ input::selection {
     background-color: #cbd5e1;
     color: #000000;
 }
+
+/* Pay-slip printing: while a pay-slip is open, print only the pay-slip (it is portaled directly under <body>). */
+@media print {
+  @page {
+    size: A4;
+    margin: 14mm;
+  }
+
+  body:has(> .payslip-print-root) {
+    background: #ffffff;
+  }
+
+  body:has(> .payslip-print-root) > :not(.payslip-print-root) {
+    display: none !important;
+  }
+
+  .payslip-print-root {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}

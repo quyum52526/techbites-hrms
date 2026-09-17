@@ -249,6 +249,7 @@ model SalaryStructure {
   medicalAllow Float     @default(0)
   otherAllow   Float     @default(0)
   taxDeduction Float     @default(0)
+  providentFund Float    @default(0) // monthly PF contribution withheld from pay
 
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
@@ -264,16 +265,27 @@ model PayrollRecord {
 
   month       String        // e.g. "September 2026"
   basicSalary Float
-  allowances  Float
-  deductions  Float
+  allowances  Float         // total of the allowance lines below
+  deductions  Float         // total of the deduction lines below
   netSalary   Float
   status      PayrollStatus @default(DRAFT)
   paymentDate DateTime?
+
+  // Line items snapshotted at generation, so a later salary change never rewrites an issued pay-slip.
+  houseRent           Float @default(0)
+  medicalAllow        Float @default(0)
+  otherAllow          Float @default(0)
+  taxDeduction        Float @default(0)
+  providentFund       Float @default(0)
+  attendanceDeduction Float @default(0) // late / absent fine
+  lateDays            Int   @default(0)
+  absentDays          Int   @default(0)
 
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
 
   @@unique([employeeId, month])
+  @@index([companyId, month])
 }
 
 // ========================================
