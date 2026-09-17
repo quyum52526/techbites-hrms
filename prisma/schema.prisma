@@ -1,0 +1,230 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// ========================================
+// ENUMS
+// ========================================
+enum Role {
+  SUPER_ADMIN
+  HR_ADMIN
+  MANAGER
+  EMPLOYEE
+}
+
+enum EmploymentType {
+  FULL_TIME
+  PART_TIME
+  CONTRACT
+  INTERN
+}
+
+enum EmployeeStatus {
+  ACTIVE
+  PROBATION
+  NOTICE_PERIOD
+  TERMINATED
+  RESIGNED
+}
+
+enum AttendanceStatus {
+  PRESENT
+  LATE
+  HALF_DAY
+  ABSENT
+  ON_LEAVE
+}
+
+enum LeaveStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+enum PayrollStatus {
+  DRAFT
+  GENERATED
+  PAID
+}
+
+// ========================================
+// AUTH & USERS
+// ========================================
+model User {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  passwordHash String
+  role         Role      @default(EMPLOYEE)
+  isActive     Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  employee     Employee?
+}
+
+// ========================================
+// CORE HR: ORG STRUCTURE & PROFILES
+// ========================================
+model Department {
+  id          String       @id @default(cuid())
+  name        String       @unique
+  description String?
+  employees   Employee[]
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+}
+
+model Designation {
+  id          String       @id @default(cuid())
+  title       String       @unique
+  description String?
+  employees   Employee[]
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+}
+
+model Employee {
+  id              String          @id @default(cuid())
+  employeeCode    String          @unique
+  userId          String          @unique
+  user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  firstName       String
+  lastName        String
+  phone           String?
+  nationalId      String?
+  gender          String?
+  dateOfBirth     DateTime?
+  address         String?
+
+  joiningDate     DateTime
+  employmentType  EmploymentType  @default(FULL_TIME)
+  status          EmployeeStatus  @default(PROBATION)
+
+  departmentId    String?
+  department      Department?     @relation(fields: [departmentId], references: [id])
+  designationId   String?
+  designation     Designation?    @relation(fields: [designationId], references: [id])
+
+  managerId       String?
+  manager         Employee?       @relation("ManagerToSubordinate", fields: [managerId], references: [id])
+  subordinates    Employee[]      @relation("ManagerToSubordinate")
+
+  attendances     AttendanceRecord[]
+  leaveRequests   LeaveRequest[]
+  salaryStructure SalaryStructure?
+  payrollRecords  PayrollRecord[]
+
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+}
+
+// ========================================
+// TIME, ATTENDANCE & SHIFTS
+// ========================================
+model Shift {
+  id           String             @id @default(cuid())
+  name         String
+  startTime    String
+  endTime      String
+  graceMinutes Int                @default(15)
+  attendances  AttendanceRecord[]
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+}
+
+model AttendanceRecord {
+  id          String           @id @default(cuid())
+  employeeId  String
+  employee    Employee         @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  date        DateTime         @db.Date
+  checkIn     DateTime?
+  checkOut    DateTime?
+  status      AttendanceStatus @default(ABSENT)
+
+  shiftId     String?
+  shift       Shift?           @relation(fields: [shiftId], references: [id])
+
+  source      String           @default("WEB")
+  ipAddress   String?
+  notes       String?
+
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  @@unique([employeeId, date])
+}
+
+// ========================================
+// LEAVE MANAGEMENT
+// ========================================
+model LeaveType {
+  id          String         @id @default(cuid())
+  name        String         @unique
+  daysAllowed Int            @default(14)
+  requests    LeaveRequest[]
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+}
+
+model LeaveRequest {
+  id          String       @id @default(cuid())
+  employeeId  String
+  employee    Employee     @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  leaveTypeId String
+  leaveType   LeaveType    @relation(fields: [leaveTypeId], references: [id])
+
+  startDate   DateTime     @db.Date
+  endDate     DateTime     @db.Date
+  reason      String
+  status      LeaveStatus  @default(PENDING)
+  approvedBy  String?
+
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+}
+
+// ========================================
+// PAYROLL & COMPENSATION
+// ========================================
+model SalaryStructure {
+  id           String    @id @default(cuid())
+  employeeId   String    @unique
+  employee     Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  basicSalary  Float
+  houseRent    Float     @default(0)
+  medicalAllow Float     @default(0)
+  otherAllow   Float     @default(0)
+  taxDeduction Float     @default(0)
+
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+}
+
+model PayrollRecord {
+  id          String        @id @default(cuid())
+  employeeId  String
+  employee    Employee      @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  month       String        // e.g. "September 2026"
+  basicSalary Float
+  allowances  Float
+  deductions  Float
+  netSalary   Float
+  status      PayrollStatus @default(DRAFT)
+  paymentDate DateTime?
+
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@unique([employeeId, month])
+}
