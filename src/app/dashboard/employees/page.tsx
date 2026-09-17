@@ -1,5 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import AddEmployeeModal from "@/components/dashboard/AddEmployeeModal";
+import CsvImportModal from "@/components/dashboard/CsvImportModal";
+import { importEmployeesCsv } from "@/app/actions/employees";
 import { Mail, Phone, ShieldCheck } from "lucide-react";
 import { getActiveCompanyId, employeeScope } from "@/lib/company";
 
@@ -32,12 +34,32 @@ export default async function EmployeesPage() {
           <h2 className="text-xl font-bold text-slate-800">Employee Directory</h2>
           <p className="text-xs text-slate-500">Manage workforce records, departments, and designations</p>
         </div>
-        <AddEmployeeModal
-          companies={companies}
-          departments={departments}
-          designations={designations}
-          activeCompanyId={activeCompanyId}
-        />
+        <div className="flex items-center gap-2">
+          <CsvImportModal
+            buttonLabel="Bulk Import CSV"
+            title="Bulk Import Employees"
+            description="Every row is checked before anything is saved. If any row has a problem, no employees are imported and each issue is listed by line number. Imported accounts get the default password Welcome123!"
+            columns={[
+              { name: "firstName", required: true },
+              { name: "lastName", required: true },
+              { name: "email", required: true },
+              { name: "employeeCode", required: true },
+              { name: "companyCode", hint: "an existing company's short code; blank uses the company selected in the top bar" },
+              { name: "department", hint: "existing department name (the company's own or a shared one)" },
+              { name: "designation", hint: "existing designation title" },
+              { name: "phone" },
+              { name: "biometricId", hint: "device ID used to match punch logs; must be unique" },
+            ]}
+            templateHref="/templates/employee-import-template.csv"
+            action={importEmployeesCsv}
+          />
+          <AddEmployeeModal
+            companies={companies}
+            departments={departments}
+            designations={designations}
+            activeCompanyId={activeCompanyId}
+          />
+        </div>
       </div>
 
       {/* Employees Table Card */}

@@ -33,15 +33,100 @@ export async function getCompanies() {
   }));
 }
 
-export async function createCompany(data: { name: string; code: string; isParent?: boolean }): Promise<CompanyActionResult> {
-  await requireCompanyAccess();
+export type CompanyInput = {
+  name: string;
+  code: string;
+  isParent?: boolean;
+  address?: string | null;
+  binNumber?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  logoUrl?: string | null;
+};
 
-  const name = data.name?.trim();
-  const code = data.code?.trim().toUpperCase();
+type CompanyData = {
+  name: string;
+  code: string;
+  isParent: boolean;
+  address: string | null;
+  binNumber: string | null;
+  phone: string | null;
+  email: string | null;
+  logoUrl: string | null;
+};
+
+const optionalText = (value: string | null | undefined) => value?.trim() || null;
+
+function companyInputFromFormData(formData: FormData): CompanyInput {
+  return {
+    name: formData.get("name") as string,
+    code: formData.get("code") as string,
+    isParent: formData.get("isParent") === "on",
+    address: formData.get("address") as string | null,
+    binNumber: formData.get("binNumber") as string | null,
+    phone: formData.get("phone") as string | null,
+    email: formData.get("email") as string | null,
+    logoUrl: formData.get("logoUrl") as string | null,
+  };
+}
+
+/** Accepts a site-relative path (/logos/tbm.png) or an absolute http(s) URL; anything else (javascript:, data:, //host) is rejected. */
+function isSafeLogoUrl(value: string) {
+  if (value.length > 2048) return false;
+  if (value.startsWith("/")) return !value.startsWith("//");
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" || url.protocol === "http:";
+  } catch {
+    return false;
+  }
+}
+
+function parseCompanyInput(input: CompanyInput): { ok: true; data: CompanyData } | { ok: false; error: string } {
+  const name = input.name?.trim();
+  const code = input.code?.trim().toUpperCase();
+  const email = optionalText(input.email);
+  const logoUrl = optionalText(input.logoUrl);
+
   if (!name) return { ok: false, error: "Company name is required" };
   if (!code || !/^[A-Z0-9-]{2,10}$/.test(code)) {
     return { ok: false, error: "Short code must be 2–10 letters, digits or dashes (e.g. TBM)" };
   }
+  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return { ok: false, error: "Enter a valid company email address" };
+  }
+  if (logoUrl && !isSafeLogoUrl(logoUrl)) {
+    return { ok: false, error: "Logo URL must start with / (e.g. /logos/tbm.png) or http(s)://" };
+  }
+
+  return {
+    ok: true,
+    data: {
+      name,
+      code,
+      isParent: input.isParent ?? false,
+      address: optionalText(input.address),
+      binNumber: optionalText(input.binNumber),
+      phone: optionalText(input.phone),
+      email,
+      logoUrl,
+    },
+  };
+}
+
+function duplicateCodeResult(err: unknown, code: string): CompanyActionResult {
+  if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
+    return { ok: false, error: `A company with code "${code}" already exists` };
+  }
+  throw err;
+}
+
+export async function createCompany(input: CompanyInput | FormData): Promise<CompanyActionResult> {
+  await requireCompanyAccess();
+
+  const parsed = parseCompanyInput(input instanceof FormData ? companyInputFromFormData(input) : input);
+  if (!parsed.ok) return parsed;
+  const { data } = parsed;
 
   try {
     await prisma.$transaction(async (tx) => {
@@ -49,15 +134,39 @@ export async function createCompany(data: { name: string; code: string; isParent
       if (data.isParent) {
         await tx.company.updateMany({ where: { isParent: true }, data: { isParent: false } });
       }
-      await tx.company.create({ data: { name, code, isParent: data.isParent ?? false } });
+      await tx.company.create({ data });
     });
   } catch (err) {
-    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
-      return { ok: false, error: `A company with code "${code}" already exists` };
-    }
-    throw err;
+    return duplicateCodeResult(err, data.code);
   }
 
+  revalidatePath("/dashboard", "layout");
+  return { ok: true };
+}
+
+export async function updateCompany(id: string, formData: FormData): Promise<CompanyActionResult> {
+  await requireCompanyAccess();
+
+  const parsed = parseCompanyInput(companyInputFromFormData(formData));
+  if (!parsed.ok) return parsed;
+  const { data } = parsed;
+
+  const existing = await prisma.company.findUnique({ where: { id }, select: { id: true } });
+  if (!existing) return { ok: false, error: "Company not found" };
+
+  try {
+    await prisma.$transaction(async (tx) => {
+      if (data.isParent) {
+        await tx.company.updateMany({ where: { isParent: true, id: { not: id } }, data: { isParent: false } });
+      }
+      await tx.company.update({ where: { id }, data });
+    });
+  } catch (err) {
+    return duplicateCodeResult(err, data.code);
+  }
+
+  // The company id is unchanged, so an active-company cookie pointing at it stays valid;
+  // revalidating the layout refreshes the switcher's name/code labels.
   revalidatePath("/dashboard", "layout");
   return { ok: true };
 }

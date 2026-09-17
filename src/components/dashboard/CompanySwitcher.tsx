@@ -3,18 +3,28 @@
 import { useTransition } from "react";
 import { Building2, ChevronDown } from "lucide-react";
 import { setActiveCompany } from "@/app/actions/company";
+import CompanyLogo from "@/components/dashboard/CompanyLogo";
 
 interface Props {
-  companies: { id: string; name: string; code: string }[];
+  companies: { id: string; name: string; code: string; logoUrl: string | null }[];
   activeCompanyId: string | null;
 }
 
 export default function CompanySwitcher({ companies, activeCompanyId }: Props) {
   const [isPending, startTransition] = useTransition();
+  const activeCompany = companies.find((company) => company.id === activeCompanyId);
+  const activeLogoUrl = activeCompany?.logoUrl ?? null;
 
   return (
     <div className="relative flex items-center">
-      <Building2 className="w-3.5 h-3.5 absolute left-2.5 text-slate-400 pointer-events-none" />
+      {/* Native <select> options can't render images, so the active company's logo sits beside the label. */}
+      {activeCompany && activeLogoUrl ? (
+        <span className="absolute left-1.5 pointer-events-none">
+          <CompanyLogo key={activeCompany.id} name={activeCompany.name} logoUrl={activeLogoUrl} className="w-5 h-5 rounded" />
+        </span>
+      ) : (
+        <Building2 className="w-3.5 h-3.5 absolute left-2.5 text-slate-400 pointer-events-none" />
+      )}
       <select
         aria-label="Filter by company"
         value={activeCompanyId ?? ""}

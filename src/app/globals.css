@@ -24,3 +24,17 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+/* ব্রাউজারের নীল সিলেকশন ও অটোফিল সাদা টেক্সট ফিক্স */
+input:-webkit-autofill,
+input:-webkit-autofill:hover, 
+input:-webkit-autofill:focus,
+input:-webkit-autofill:active {
+    -webkit-box-shadow: 0 0 0 30px white inset !important;
+    -webkit-text-fill-color: #000000 !important;
+}
+
+/* টাইপ করার সময় কোনো টেক্সট সিলেক্ট হলে কালো টেক্সট নিশ্চিত করা */
+input::selection {
+    background-color: #cbd5e1;
+    color: #000000;
+}

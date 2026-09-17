@@ -5,7 +5,7 @@ import CompanySwitcher from "@/components/dashboard/CompanySwitcher";
 
 interface Props {
   role: Role;
-  companies: { id: string; name: string; code: string }[];
+  companies: { id: string; name: string; code: string; logoUrl: string | null }[];
   activeCompanyId: string | null;
 }
 

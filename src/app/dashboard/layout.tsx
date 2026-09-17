@@ -14,7 +14,7 @@ export default async function DashboardLayout({
   const [companies, activeCompanyId] = canSwitchCompany
     ? await Promise.all([
         prisma.company.findMany({
-          select: { id: true, name: true, code: true },
+          select: { id: true, name: true, code: true, logoUrl: true },
           orderBy: [{ isParent: "desc" }, { name: "asc" }],
         }),
         getActiveCompanyId(),

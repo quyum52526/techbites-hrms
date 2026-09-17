@@ -1,12 +1,23 @@
 import { prisma } from "@/lib/prisma";
-import { Clock, Calendar, CheckCircle2, AlertCircle, UserCheck } from "lucide-react";
+import { Calendar, CheckCircle2, AlertCircle, UserCheck } from "lucide-react";
+import { getActiveUser } from "@/lib/auth";
+import { orgToday } from "@/lib/attendance-time";
+import { getActiveCompanyId, employeeScope } from "@/lib/company";
+import { importPunchLogsCsv } from "@/app/actions/attendance";
+import CsvImportModal from "@/components/dashboard/CsvImportModal";
+
+const ORG_TIME_ZONE = "Asia/Dhaka";
 
 export default async function AttendancePage() {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  const today = orgToday();
+  const [user, activeCompanyId] = await Promise.all([getActiveUser(), getActiveCompanyId()]);
+  const canImport = user.role === "SUPER_ADMIN" || user.role === "HR_ADMIN";
+  // Attendance belongs to whichever company the employee is in; "All Companies" leaves this empty.
+  const employeeWhere = employeeScope(activeCompanyId);
 
-  const [attendances, totalEmployees] = await Promise.all([
+  const [attendances, totalEmployees, presentToday, lateToday] = await Promise.all([
     prisma.attendanceRecord.findMany({
+      where: { employee: employeeWhere },
       include: {
         employee: {
           include: {
@@ -20,16 +31,10 @@ export default async function AttendancePage() {
       orderBy: { date: "desc" },
       take: 50,
     }),
-    prisma.employee.count(),
+    prisma.employee.count({ where: employeeWhere }),
+    prisma.attendanceRecord.count({ where: { date: today, status: "PRESENT", employee: employeeWhere } }),
+    prisma.attendanceRecord.count({ where: { date: today, status: "LATE", employee: employeeWhere } }),
   ]);
-
-  const presentToday = attendances.filter(
-    (a) => new Date(a.date).toDateString() === today.toDateString() && a.status === "PRESENT"
-  ).length;
-
-  const lateToday = attendances.filter(
-    (a) => new Date(a.date).toDateString() === today.toDateString() && a.status === "LATE"
-  ).length;
 
   return (
     <div className="space-y-6">
@@ -38,6 +43,23 @@ export default async function AttendancePage() {
           <h2 className="text-xl font-bold text-slate-800">Attendance & Shifts</h2>
           <p className="text-xs text-slate-500">Monitor employee punch logs, working hours, and shift adherence</p>
         </div>
+        {canImport && (
+          <CsvImportModal
+            buttonLabel="Upload Punch Logs (.csv)"
+            title="Upload Biometric Punch Logs"
+            description="Each row is one punch from the biometric device. For every employee and day, the first punch becomes the check-in and the last punch the check-out. Check-ins are marked PRESENT or LATE using the shift policy from Settings. Re-uploading the same log does not create duplicates."
+            columns={[
+              { name: "biometricId", required: true, hint: "must match an employee's Biometric / Device ID" },
+              {
+                name: "timestamp",
+                required: true,
+                hint: "Bangladesh time (GMT+6) as DD/MM/YYYY HH:mm:ss (e.g. 17/09/2026 09:05:12) or YYYY-MM-DD HH:mm:ss",
+              },
+            ]}
+            templateHref="/templates/punch-log-template.csv"
+            action={importPunchLogsCsv}
+          />
+        )}
       </div>
 
       {/* Overview Cards */}
@@ -113,16 +135,17 @@ export default async function AttendancePage() {
                       </div>
                     </td>
                     <td className="py-3 px-4 text-slate-600">
-                      {new Date(record.date).toLocaleDateString()}
+                      {/* DATE columns come back as UTC midnight, so format in UTC to avoid shifting the day. */}
+                      {new Date(record.date).toLocaleDateString(undefined, { timeZone: "UTC" })}
                     </td>
                     <td className="py-3 px-4 text-slate-700 font-medium">
                       {record.checkIn
-                        ? new Date(record.checkIn).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+                        ? new Date(record.checkIn).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", timeZone: ORG_TIME_ZONE })
                         : "--:--"}
                     </td>
                     <td className="py-3 px-4 text-slate-700 font-medium">
                       {record.checkOut
-                        ? new Date(record.checkOut).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+                        ? new Date(record.checkOut).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", timeZone: ORG_TIME_ZONE })
                         : "--:--"}
                     </td>
                     <td className="py-3 px-4">

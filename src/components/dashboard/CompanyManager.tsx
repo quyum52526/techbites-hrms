@@ -1,26 +1,47 @@
 "use client";
 
 import { useState } from "react";
-import { Building, Plus, Trash2, X } from "lucide-react";
+import { Building, Pencil, Plus, Trash2, X } from "lucide-react";
 import { clsx } from "clsx";
-import { createCompany, deleteCompany } from "@/app/actions/company";
+import { createCompany, deleteCompany, updateCompany } from "@/app/actions/company";
+import CompanyLogo from "@/components/dashboard/CompanyLogo";
 
 interface Company {
   id: string;
   name: string;
   code: string;
   isParent: boolean;
+  logoUrl: string | null;
+  address: string | null;
+  binNumber: string | null;
+  phone: string | null;
+  email: string | null;
   employeeCount: number;
 }
 
+type ModalState = { mode: "create" } | { mode: "edit"; company: Company } | null;
+
+const inputClass =
+  "w-full border border-slate-200 rounded-lg p-2 text-slate-900 bg-white font-medium placeholder:text-slate-400 placeholder:font-normal focus:ring-1 focus:ring-indigo-500 outline-none";
+const labelClass = "block text-slate-600 font-medium mb-1";
+
 export default function CompanyManager({ companies }: { companies: Company[] }) {
-  const [isOpen, setIsOpen] = useState(false);
+  const [modal, setModal] = useState<ModalState>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [logoPreview, setLogoPreview] = useState("");
+
+  const editing = modal?.mode === "edit" ? modal.company : null;
+
+  const openModal = (state: NonNullable<ModalState>) => {
+    setError(null);
+    setLogoPreview(state.mode === "edit" ? state.company.logoUrl ?? "" : "");
+    setModal(state);
+  };
 
   const closeModal = () => {
-    setIsOpen(false);
+    setModal(null);
     setError(null);
   };
 
@@ -30,15 +51,11 @@ export default function CompanyManager({ companies }: { companies: Company[] }) 
     setError(null);
     const formData = new FormData(e.currentTarget);
     try {
-      const result = await createCompany({
-        name: formData.get("name") as string,
-        code: formData.get("code") as string,
-        isParent: formData.get("isParent") === "on",
-      });
+      const result = editing ? await updateCompany(editing.id, formData) : await createCompany(formData);
       if (result.ok) closeModal();
       else setError(result.error);
     } catch {
-      setError("Failed to create company");
+      setError(editing ? "Failed to update company" : "Failed to create company");
     } finally {
       setLoading(false);
     }
@@ -65,7 +82,7 @@ export default function CompanyManager({ companies }: { companies: Company[] }) 
           <span>Sister Concerns & Companies</span>
         </div>
         <button
-          onClick={() => setIsOpen(true)}
+          onClick={() => openModal({ mode: "create" })}
           className="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold px-3 py-1.5 rounded-lg shadow-sm"
         >
           <Plus className="w-3.5 h-3.5" /> Add Company
@@ -81,6 +98,7 @@ export default function CompanyManager({ companies }: { companies: Company[] }) 
               <tr className="text-left text-slate-500 border-b border-slate-100">
                 <th className="py-2 pr-3 font-medium">Company Name</th>
                 <th className="py-2 pr-3 font-medium">Code</th>
+                <th className="py-2 pr-3 font-medium">BIN / Tax ID</th>
                 <th className="py-2 pr-3 font-medium text-right">Total Employees</th>
                 <th className="py-2 pr-3 font-medium">Type</th>
                 <th className="py-2 font-medium sr-only">Actions</th>
@@ -89,10 +107,23 @@ export default function CompanyManager({ companies }: { companies: Company[] }) 
             <tbody className="divide-y divide-slate-100">
               {companies.map((company) => (
                 <tr key={company.id} className="hover:bg-slate-50/60">
-                  <td className="py-2.5 pr-3 font-medium text-slate-700">{company.name}</td>
+                  <td className="py-2.5 pr-3">
+                    <div className="flex items-center gap-2.5">
+                      <CompanyLogo name={company.name} logoUrl={company.logoUrl} />
+                      <div className="min-w-0">
+                        <p className="font-medium text-slate-700">{company.name}</p>
+                        {(company.email || company.phone) && (
+                          <p className="text-[11px] text-slate-400 mt-0.5">
+                            {[company.email, company.phone].filter(Boolean).join(" · ")}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </td>
                   <td className="py-2.5 pr-3">
                     <span className="font-mono text-[11px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-600">{company.code}</span>
                   </td>
+                  <td className="py-2.5 pr-3 font-mono text-slate-600">{company.binNumber ?? <span className="text-slate-300">—</span>}</td>
                   <td className="py-2.5 pr-3 text-right tabular-nums text-slate-700">{company.employeeCount}</td>
                   <td className="py-2.5 pr-3">
                     <span
@@ -104,7 +135,14 @@ export default function CompanyManager({ companies }: { companies: Company[] }) 
                       {company.isParent ? "Parent" : "Sister"}
                     </span>
                   </td>
-                  <td className="py-2.5 text-right">
+                  <td className="py-2.5 text-right whitespace-nowrap">
+                    <button
+                      onClick={() => openModal({ mode: "edit", company })}
+                      title={`Edit ${company.name}`}
+                      className="p-1.5 rounded-md text-slate-400 hover:text-indigo-600 hover:bg-indigo-50"
+                    >
+                      <Pencil className="w-3.5 h-3.5" />
+                    </button>
                     <button
                       onClick={() => handleDelete(company)}
                       disabled={deletingId === company.id}
@@ -121,48 +159,122 @@ export default function CompanyManager({ companies }: { companies: Company[] }) 
         </div>
       )}
 
-      {isOpen && (
+      {modal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-md border border-slate-200 overflow-hidden">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-lg border border-slate-200 overflow-hidden">
             <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
-              <h3 className="font-semibold text-slate-800 text-sm">Add Company / Sister Concern</h3>
+              <h3 className="font-semibold text-slate-800 text-sm">
+                {editing ? `Edit ${editing.name}` : "Add Company / Sister Concern"}
+              </h3>
               <button onClick={closeModal} className="text-slate-400 hover:text-slate-600">
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            <form onSubmit={handleSubmit} className="p-6 space-y-4 text-xs">
+            {/* key resets the uncontrolled defaults when switching between companies */}
+            <form key={editing?.id ?? "create"} onSubmit={handleSubmit} autoComplete="off" className="p-6 space-y-4 text-xs">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="sm:col-span-2">
+                  <label className={labelClass}>Company Name *</label>
+                  <input
+                    name="name"
+                    required
+                    autoComplete="off"
+                    defaultValue={editing?.name}
+                    placeholder="TechBites Media"
+                    className={inputClass}
+                  />
+                </div>
+                <div>
+                  <label className={labelClass}>Short Code *</label>
+                  <input
+                    name="code"
+                    required
+                    maxLength={10}
+                    autoComplete="off"
+                    defaultValue={editing?.code}
+                    placeholder="TBM"
+                    className={clsx(inputClass, "font-mono uppercase")}
+                  />
+                </div>
+              </div>
+
               <div>
-                <label className="block text-slate-600 font-medium mb-1">Company Name *</label>
+                <label className={labelClass}>Company Logo URL</label>
+                <div className="flex items-center gap-2.5">
+                  <CompanyLogo name={editing?.name ?? "New Company"} logoUrl={logoPreview.trim() || null} className="w-9 h-9" />
+                  <input
+                    name="logoUrl"
+                    autoComplete="off"
+                    value={logoPreview}
+                    onChange={(e) => setLogoPreview(e.target.value)}
+                    placeholder="Optional, e.g. /logos/lmt.png or https://..."
+                    className={inputClass}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className={labelClass}>BIN / Tax ID</label>
                 <input
-                  name="name"
-                  required
-                  placeholder="TechBites Media"
-                  className="w-full border border-slate-200 rounded-lg p-2 focus:ring-1 focus:ring-indigo-500 outline-none"
+                  name="binNumber"
+                  autoComplete="off"
+                  defaultValue={editing?.binNumber ?? ""}
+                  placeholder="Optional"
+                  className={clsx(inputClass, "font-mono")}
                 />
               </div>
 
               <div>
-                <label className="block text-slate-600 font-medium mb-1">Short Code *</label>
-                <input
-                  name="code"
-                  required
-                  maxLength={10}
-                  placeholder="TBM"
-                  className="w-full border border-slate-200 rounded-lg p-2 font-mono uppercase focus:ring-1 focus:ring-indigo-500 outline-none"
+                <label className={labelClass}>Address</label>
+                <textarea
+                  name="address"
+                  rows={2}
+                  autoComplete="off"
+                  defaultValue={editing?.address ?? ""}
+                  placeholder="Optional"
+                  className={clsx(inputClass, "resize-none")}
                 />
-                <span className="text-[10px] text-slate-400 mt-1 block">2–10 characters, must be unique across companies.</span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className={labelClass}>Phone</label>
+                  <input
+                    name="phone"
+                    type="tel"
+                    autoComplete="off"
+                    defaultValue={editing?.phone ?? ""}
+                    placeholder="Optional"
+                    className={inputClass}
+                  />
+                </div>
+                <div>
+                  <label className={labelClass}>Email</label>
+                  <input
+                    name="email"
+                    type="email"
+                    autoComplete="off"
+                    defaultValue={editing?.email ?? ""}
+                    placeholder="Optional"
+                    className={inputClass}
+                  />
+                </div>
               </div>
 
               <label className="flex items-start gap-2 p-3 rounded-lg border border-slate-200 bg-slate-50 cursor-pointer">
-                <input type="checkbox" name="isParent" className="mt-0.5 accent-indigo-600" />
+                <input type="checkbox" name="isParent" defaultChecked={editing?.isParent} className="mt-0.5 accent-indigo-600" />
                 <span>
                   <span className="block font-medium text-slate-700">Parent company</span>
                   <span className="block text-[10px] text-slate-400">Only one parent is allowed — the current parent becomes a sister concern.</span>
                 </span>
               </label>
 
-              {error && <p className="px-3 py-2 rounded-lg bg-rose-50 text-rose-700 border border-rose-100">{error}</p>}
+              {error && (
+                <p className="px-3 py-2 rounded-lg bg-red-100 text-black font-semibold border border-red-300">
+                  {error}
+                </p>
+              )}
 
               <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
                 <button
@@ -177,7 +289,7 @@ export default function CompanyManager({ companies }: { companies: Company[] }) 
                   disabled={loading}
                   className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white rounded-lg font-semibold"
                 >
-                  {loading ? "Saving..." : "Create Company"}
+                  {loading ? "Saving..." : editing ? "Save Changes" : "Create Company"}
                 </button>
               </div>
             </form>

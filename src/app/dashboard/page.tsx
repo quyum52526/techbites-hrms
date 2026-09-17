@@ -3,10 +3,10 @@ import { Users, Clock, CalendarCheck2, Building2, UserPlus } from "lucide-react"
 import QuickPunch from "@/components/dashboard/QuickPunch";
 import Link from "next/link";
 import { getActiveCompanyId, employeeScope, departmentScope } from "@/lib/company";
+import { orgToday } from "@/lib/attendance-time";
 
 export default async function DashboardPage() {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  const today = orgToday();
 
   const activeCompanyId = await getActiveCompanyId();
   const employeeWhere = employeeScope(activeCompanyId);

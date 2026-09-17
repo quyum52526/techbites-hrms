@@ -142,7 +142,11 @@ export default function AddEmployeeModal({ companies, departments, designations,
                 </div>
               </div>
 
-              {error && <p className="px-3 py-2 rounded-lg bg-rose-50 text-rose-700 border border-rose-100">{error}</p>}
+              {error && (
+                <p className="px-3 py-2 rounded-lg bg-red-100 text-black font-semibold border border-red-300">
+                  {error}
+                </p>
+              )}
 
               <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
                 <button

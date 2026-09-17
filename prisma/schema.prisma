@@ -91,7 +91,11 @@ model Company {
   name        String          // e.g. "TechBites Media", "TechBites Logistics"
   code        String          @unique // e.g. "TBM", "TBL"
   isParent    Boolean         @default(false)
-  logo        String?
+  logoUrl     String?
+  address     String?
+  binNumber   String?         // Business Identification Number / Tax ID
+  phone       String?
+  email       String?
   createdAt   DateTime        @default(now())
 
   employees   Employee[]

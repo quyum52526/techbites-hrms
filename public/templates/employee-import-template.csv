@@ -1,0 +1,4 @@
+firstName,lastName,email,employeeCode,companyCode,department,designation,phone,biometricId
+Rahim,Uddin,rahim.uddin@example.com,EMP-101,LMT-001,Engineering,Lead Engineer,+8801711000101,1001
+Nusrat,Jahan,nusrat.jahan@example.com,EMP-102,LMT-002,Human Resources,,+8801711000102,1002
+Karim,Hossain,karim.hossain@example.com,EMP-103,,,,,
