@@ -1,14 +1,24 @@
 import { prisma } from "@/lib/prisma";
 import { createDepartment, createDesignation } from "@/app/actions/departments";
 import { Building2, Briefcase, Plus, Users } from "lucide-react";
+import { getActiveCompanyId, employeeScope, departmentScope } from "@/lib/company";
 
 export default async function DepartmentsPage() {
-  const [departments, designations] = await Promise.all([
+  const activeCompanyId = await getActiveCompanyId();
+
+  const [departments, companies, designations] = await Promise.all([
     prisma.department.findMany({
+      where: departmentScope(activeCompanyId),
       include: {
-        _count: { select: { employees: true } },
+        company: { select: { code: true, name: true } },
+        // Shared departments show only the selected company's headcount.
+        _count: { select: { employees: { where: employeeScope(activeCompanyId) } } },
       },
       orderBy: { createdAt: "desc" },
+    }),
+    prisma.company.findMany({
+      select: { id: true, name: true, code: true },
+      orderBy: [{ isParent: "desc" }, { name: "asc" }],
     }),
     prisma.designation.findMany({
       include: {
@@ -53,6 +63,19 @@ export default async function DepartmentsPage() {
                   className="w-full border border-slate-200 rounded-lg p-2 focus:ring-1 focus:ring-indigo-500 outline-none"
                 />
               </div>
+              <div>
+                <label className="block text-slate-600 font-medium mb-1">Company / Sister Concern</label>
+                <select
+                  name="companyId"
+                  defaultValue={activeCompanyId ?? ""}
+                  className="w-full border border-slate-200 rounded-lg p-2 focus:ring-1 focus:ring-indigo-500 outline-none bg-white"
+                >
+                  <option value="">Shared across all companies</option>
+                  {companies.map((c) => (
+                    <option key={c.id} value={c.id}>{c.name} ({c.code})</option>
+                  ))}
+                </select>
+              </div>
               <button
                 type="submit"
                 className="w-full flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors"
@@ -73,7 +96,16 @@ export default async function DepartmentsPage() {
               {departments.map((dept) => (
                 <div key={dept.id} className="p-4 flex items-center justify-between hover:bg-slate-50">
                   <div>
-                    <p className="font-semibold text-slate-900">{dept.name}</p>
+                    <p className="font-semibold text-slate-900 flex items-center gap-2">
+                      {dept.name}
+                      {dept.company ? (
+                        <span title={dept.company.name} className="font-mono text-[10px] font-medium px-1.5 py-0.5 rounded bg-sky-50 text-sky-700">
+                          {dept.company.code}
+                        </span>
+                      ) : (
+                        <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-slate-100 text-slate-500">Shared</span>
+                      )}
+                    </p>
                     <p className="text-slate-400 text-[11px] mt-0.5">{dept.description || "No description provided"}</p>
                   </div>
                   <div className="flex items-center gap-1.5 text-slate-500 bg-slate-50 border border-slate-200 px-2.5 py-1 rounded-md">

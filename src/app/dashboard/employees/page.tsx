@@ -1,18 +1,27 @@
 import { prisma } from "@/lib/prisma";
 import AddEmployeeModal from "@/components/dashboard/AddEmployeeModal";
 import { Mail, Phone, ShieldCheck } from "lucide-react";
+import { getActiveCompanyId, employeeScope } from "@/lib/company";
 
 export default async function EmployeesPage() {
-  const [employees, departments, designations] = await Promise.all([
+  const activeCompanyId = await getActiveCompanyId();
+
+  const [employees, companies, departments, designations] = await Promise.all([
     prisma.employee.findMany({
+      where: employeeScope(activeCompanyId),
       include: {
+        company: { select: { code: true, name: true } },
         department: true,
         designation: true,
         user: true,
       },
       orderBy: { createdAt: "desc" },
     }),
-    prisma.department.findMany({ select: { id: true, name: true } }),
+    prisma.company.findMany({
+      select: { id: true, name: true, code: true },
+      orderBy: [{ isParent: "desc" }, { name: "asc" }],
+    }),
+    prisma.department.findMany({ select: { id: true, name: true, companyId: true }, orderBy: { name: "asc" } }),
     prisma.designation.findMany({ select: { id: true, title: true } }),
   ]);
 
@@ -23,7 +32,12 @@ export default async function EmployeesPage() {
           <h2 className="text-xl font-bold text-slate-800">Employee Directory</h2>
           <p className="text-xs text-slate-500">Manage workforce records, departments, and designations</p>
         </div>
-        <AddEmployeeModal departments={departments} designations={designations} />
+        <AddEmployeeModal
+          companies={companies}
+          departments={departments}
+          designations={designations}
+          activeCompanyId={activeCompanyId}
+        />
       </div>
 
       {/* Employees Table Card */}
@@ -54,7 +68,14 @@ export default async function EmployeesPage() {
                       </div>
                     </div>
                   </td>
-                  <td className="py-3 px-4 font-mono font-medium text-slate-600">{emp.employeeCode}</td>
+                  <td className="py-3 px-4">
+                    <p className="font-mono font-medium text-slate-600">{emp.employeeCode}</p>
+                    {emp.company && (
+                      <span title={emp.company.name} className="inline-block mt-1 font-mono text-[10px] px-1.5 py-0.5 rounded bg-sky-50 text-sky-700">
+                        {emp.company.code}
+                      </span>
+                    )}
+                  </td>
                   <td className="py-3 px-4">
                     <p className="font-medium text-slate-800">{emp.designation?.title ?? "No Designation"}</p>
                     <p className="text-[11px] text-slate-400">{emp.department?.name ?? "General"}</p>

@@ -1,8 +1,17 @@
 import { Bell, Search } from "lucide-react";
 import type { Role } from "@prisma/client";
 import { roleLabels } from "@/lib/auth-shared";
+import CompanySwitcher from "@/components/dashboard/CompanySwitcher";
 
-export default function TopNav({ role }: { role: Role }) {
+interface Props {
+  role: Role;
+  companies: { id: string; name: string; code: string }[];
+  activeCompanyId: string | null;
+}
+
+export default function TopNav({ role, companies, activeCompanyId }: Props) {
+  const canSwitchCompany = role === "SUPER_ADMIN" || role === "HR_ADMIN";
+
   return (
     <header className="h-16 bg-white border-b border-slate-200 px-6 flex items-center justify-between shrink-0">
       <div className="relative w-80">
@@ -15,6 +24,7 @@ export default function TopNav({ role }: { role: Role }) {
       </div>
 
       <div className="flex items-center gap-4">
+        {canSwitchCompany && <CompanySwitcher companies={companies} activeCompanyId={activeCompanyId} />}
         <span className="px-2.5 py-1 rounded-full bg-indigo-50 text-indigo-700 text-[10px] font-semibold tracking-wide">
           {roleLabels[role]}
         </span>

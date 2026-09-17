@@ -2,32 +2,44 @@ import { prisma } from "@/lib/prisma";
 import { Users, Clock, CalendarCheck2, Building2, UserPlus } from "lucide-react";
 import QuickPunch from "@/components/dashboard/QuickPunch";
 import Link from "next/link";
+import { getActiveCompanyId, employeeScope, departmentScope } from "@/lib/company";
 
 export default async function DashboardPage() {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
-  const [totalEmployees, totalDepartments, pendingLeaves, recentEmployees, adminEmployee, todayAttendance] = 
+  const activeCompanyId = await getActiveCompanyId();
+  const employeeWhere = employeeScope(activeCompanyId);
+
+  const [totalEmployees, totalDepartments, pendingLeaves, recentEmployees, adminEmployee, presentToday] =
     await Promise.all([
-      prisma.employee.count(),
-      prisma.department.count(),
-      prisma.leaveRequest.count({ where: { status: "PENDING" } }),
+      prisma.employee.count({ where: employeeWhere }),
+      prisma.department.count({ where: departmentScope(activeCompanyId) }),
+      prisma.leaveRequest.count({ where: { status: "PENDING", employee: employeeWhere } }),
       prisma.employee.findMany({
+        where: employeeWhere,
         take: 5,
         include: { department: true, designation: true },
         orderBy: { createdAt: "desc" },
       }),
       prisma.employee.findFirst(),
-      prisma.attendanceRecord.findFirst({
-        where: { date: today },
+      prisma.attendanceRecord.count({
+        where: { date: today, checkIn: { not: null }, employee: employeeWhere },
       }),
     ]);
+
+  // QuickPunch is personal, so it reads the punching employee's own record rather than the company-wide count.
+  const todayAttendance = adminEmployee
+    ? await prisma.attendanceRecord.findUnique({
+        where: { employeeId_date: { employeeId: adminEmployee.id, date: today } },
+      })
+    : null;
 
   const cards = [
     { label: "Total Employees", value: totalEmployees, icon: Users, color: "text-blue-600 bg-blue-50" },
     { label: "Departments", value: totalDepartments, icon: Building2, color: "text-emerald-600 bg-emerald-50" },
     { label: "Pending Leaves", value: pendingLeaves, icon: CalendarCheck2, color: "text-amber-600 bg-amber-50" },
-    { label: "Today's Attendance", value: todayAttendance ? "Present" : "Pending", icon: Clock, color: "text-indigo-600 bg-indigo-50" },
+    { label: "Today's Attendance", value: `${presentToday} / ${totalEmployees}`, icon: Clock, color: "text-indigo-600 bg-indigo-50" },
   ];
 
   return (

@@ -1,12 +1,19 @@
 import { prisma } from "@/lib/prisma";
 import { updateShiftConfig } from "@/app/actions/settings";
+import { getCompanies } from "@/app/actions/company";
+import { getActiveUser } from "@/lib/auth";
+import CompanyManager from "@/components/dashboard/CompanyManager";
 import { Settings, ShieldAlert, Clock, Building2, Save } from "lucide-react";
 
 export default async function SettingsPage() {
-  const [defaultShift, leaveTypes, adminUser] = await Promise.all([
+  const user = await getActiveUser();
+  const canManageCompanies = user.role === "SUPER_ADMIN" || user.role === "HR_ADMIN";
+
+  const [defaultShift, leaveTypes, adminUser, companies] = await Promise.all([
     prisma.shift.findFirst(),
     prisma.leaveType.findMany(),
     prisma.user.findFirst({ where: { role: "SUPER_ADMIN" } }),
+    canManageCompanies ? getCompanies() : Promise.resolve([]),
   ]);
 
   return (
@@ -124,6 +131,13 @@ export default async function SettingsPage() {
             </div>
           </div>
         </div>
+
+        {/* Sister Concerns & Companies */}
+        {canManageCompanies && (
+          <div className="lg:col-span-2">
+            <CompanyManager companies={companies} />
+          </div>
+        )}
 
         {/* Leave Quota Matrix */}
         <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-3">

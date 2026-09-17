@@ -71,16 +71,32 @@ enum AppraisalStatus {
 // AUTH & USERS
 // ========================================
 model User {
-  id           String    @id @default(cuid())
-  email        String    @unique
-  passwordHash String
-  role         Role      @default(EMPLOYEE)
-  isActive     Boolean   @default(true)
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  id               String            @id @default(cuid())
+  email            String            @unique
+  passwordHash     String
+  role             Role              @default(EMPLOYEE)
+  isActive         Boolean           @default(true)
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
 
-  employee     Employee?
+  employee         Employee?
   appraisalReviews AppraisalReview[] @relation("AppraisalReviewer")
+}
+
+// ========================================
+// MULTI-COMPANY / SISTER CONCERNS
+// ========================================
+model Company {
+  id          String          @id @default(cuid())
+  name        String          // e.g. "TechBites Media", "TechBites Logistics"
+  code        String          @unique // e.g. "TBM", "TBL"
+  isParent    Boolean         @default(false)
+  logo        String?
+  createdAt   DateTime        @default(now())
+
+  employees   Employee[]
+  departments Department[]
+  payrolls    PayrollRecord[]
 }
 
 // ========================================
@@ -90,6 +106,10 @@ model Department {
   id          String       @id @default(cuid())
   name        String       @unique
   description String?
+  
+  companyId   String?
+  company     Company?     @relation(fields: [companyId], references: [id], onDelete: SetNull)
+
   employees   Employee[]
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
@@ -105,40 +125,44 @@ model Designation {
 }
 
 model Employee {
-  id              String          @id @default(cuid())
-  employeeCode    String          @unique
-  userId          String?         @unique
-  user            User?           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id               String          @id @default(cuid())
+  employeeCode     String          @unique
+  biometricId      String?         @unique // Shared device/biometric machine card ID
+  userId           String?         @unique
+  user             User?           @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  firstName       String
-  lastName        String
-  phone           String?
-  nationalId      String?
-  gender          String?
-  dateOfBirth     DateTime?
-  address         String?
+  companyId        String?
+  company          Company?        @relation(fields: [companyId], references: [id], onDelete: SetNull)
 
-  joiningDate     DateTime
-  employmentType  EmploymentType  @default(FULL_TIME)
-  status          EmployeeStatus  @default(PROBATION)
+  firstName        String
+  lastName         String
+  phone            String?
+  nationalId       String?
+  gender           String?
+  dateOfBirth      DateTime?
+  address          String?
 
-  departmentId    String?
-  department      Department?     @relation(fields: [departmentId], references: [id])
-  designationId   String?
-  designation     Designation?    @relation(fields: [designationId], references: [id])
+  joiningDate      DateTime
+  employmentType   EmploymentType  @default(FULL_TIME)
+  status           EmployeeStatus  @default(PROBATION)
 
-  managerId       String?
-  manager         Employee?       @relation("TeamHierarchy", fields: [managerId], references: [id])
-  subordinates    Employee[]      @relation("TeamHierarchy")
+  departmentId     String?
+  department       Department?     @relation(fields: [departmentId], references: [id])
+  designationId    String?
+  designation      Designation?    @relation(fields: [designationId], references: [id])
 
-  attendances     AttendanceRecord[]
-  leaveRequests   LeaveRequest[]
-  salaryStructure SalaryStructure?
-  payrollRecords  PayrollRecord[]
+  managerId        String?
+  manager          Employee?       @relation("TeamHierarchy", fields: [managerId], references: [id])
+  subordinates     Employee[]      @relation("TeamHierarchy")
+
+  attendances      AttendanceRecord[]
+  leaveRequests    LeaveRequest[]
+  salaryStructure  SalaryStructure?
+  payrollRecords   PayrollRecord[]
   appraisalReviews AppraisalReview[]
 
-  createdAt       DateTime        @default(now())
-  updatedAt       DateTime        @updatedAt
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
 }
 
 // ========================================
@@ -231,6 +255,9 @@ model PayrollRecord {
   employeeId  String
   employee    Employee      @relation(fields: [employeeId], references: [id], onDelete: Cascade)
 
+  companyId   String?
+  company     Company?      @relation(fields: [companyId], references: [id], onDelete: SetNull)
+
   month       String        // e.g. "September 2026"
   basicSalary Float
   allowances  Float
@@ -245,15 +272,18 @@ model PayrollRecord {
   @@unique([employeeId, month])
 }
 
+// ========================================
+// PERFORMANCE & APPRAISALS
+// ========================================
 model AppraisalCycle {
-  id        String          @id @default(cuid())
+  id        String            @id @default(cuid())
   title     String
-  period    AppraisalPeriod @default(QUARTERLY)
+  period    AppraisalPeriod   @default(QUARTERLY)
   startDate DateTime
   endDate   DateTime
-  isActive  Boolean         @default(true)
+  isActive  Boolean           @default(true)
   reviews   AppraisalReview[]
-  createdAt DateTime        @default(now())
+  createdAt DateTime          @default(now())
 }
 
 model AppraisalReview {

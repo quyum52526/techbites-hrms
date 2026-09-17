@@ -5,23 +5,38 @@ import { UserPlus, X } from "lucide-react";
 import { createEmployee } from "@/app/actions/employees";
 
 interface Props {
-  departments: { id: string; name: string }[];
+  companies: { id: string; name: string; code: string }[];
+  departments: { id: string; name: string; companyId: string | null }[];
   designations: { id: string; title: string }[];
+  activeCompanyId: string | null;
 }
 
-export default function AddEmployeeModal({ departments, designations }: Props) {
+export default function AddEmployeeModal({ companies, departments, designations, activeCompanyId }: Props) {
   const [isOpen, setIsOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [companyId, setCompanyId] = useState(activeCompanyId ?? "");
+
+  // Shared departments (no company) are always selectable.
+  const availableDepartments = departments.filter((d) => !d.companyId || d.companyId === companyId);
+
+  const openModal = () => {
+    setCompanyId(activeCompanyId ?? "");
+    setError(null);
+    setIsOpen(true);
+  };
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setLoading(true);
+    setError(null);
     const formData = new FormData(e.currentTarget);
     try {
-      await createEmployee(formData);
-      setIsOpen(false);
-    } catch (err: any) {
-      alert(err.message || "Failed to create employee");
+      const result = await createEmployee(formData);
+      if (result.ok) setIsOpen(false);
+      else setError(result.error);
+    } catch {
+      setError("Failed to create employee");
     } finally {
       setLoading(false);
     }
@@ -30,7 +45,7 @@ export default function AddEmployeeModal({ departments, designations }: Props) {
   return (
     <>
       <button
-        onClick={() => setIsOpen(true)}
+        onClick={openModal}
         className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold px-4 py-2 rounded-lg shadow-sm"
       >
         <UserPlus className="w-4 h-4" /> Add Employee
@@ -71,11 +86,32 @@ export default function AddEmployeeModal({ departments, designations }: Props) {
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
+                  <label className="block text-slate-600 font-medium mb-1">Company / Sister Concern</label>
+                  <select
+                    name="companyId"
+                    value={companyId}
+                    onChange={(e) => setCompanyId(e.target.value)}
+                    className="w-full border border-slate-200 rounded-lg p-2 focus:ring-1 focus:ring-indigo-500 outline-none bg-white"
+                  >
+                    <option value="">Unassigned</option>
+                    {companies.map((c) => (
+                      <option key={c.id} value={c.id}>{c.name} ({c.code})</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-slate-600 font-medium mb-1">Biometric / Device ID</label>
+                  <input name="biometricId" placeholder="Optional, e.g. 10245" className="w-full border border-slate-200 rounded-lg p-2 font-mono focus:ring-1 focus:ring-indigo-500 outline-none" />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
                   <label className="block text-slate-600 font-medium mb-1">Department</label>
-                  <select name="departmentId" className="w-full border border-slate-200 rounded-lg p-2 focus:ring-1 focus:ring-indigo-500 outline-none bg-white">
+                  <select key={companyId} name="departmentId" className="w-full border border-slate-200 rounded-lg p-2 focus:ring-1 focus:ring-indigo-500 outline-none bg-white">
                     <option value="">Select Department</option>
-                    {departments.map((d) => (
-                      <option key={d.id} value={d.id}>{d.name}</option>
+                    {availableDepartments.map((d) => (
+                      <option key={d.id} value={d.id}>{d.name}{d.companyId ? "" : " (Shared)"}</option>
                     ))}
                   </select>
                 </div>
@@ -106,6 +142,8 @@ export default function AddEmployeeModal({ departments, designations }: Props) {
                 </div>
               </div>
 
+              {error && <p className="px-3 py-2 rounded-lg bg-rose-50 text-rose-700 border border-rose-100">{error}</p>}
+
               <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
                 <button
                   type="button"
@@ -117,7 +155,7 @@ export default function AddEmployeeModal({ departments, designations }: Props) {
                 <button
                   type="submit"
                   disabled={loading}
-                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-semibold"
+                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white rounded-lg font-semibold"
                 >
                   {loading ? "Saving..." : "Create Employee"}
                 </button>

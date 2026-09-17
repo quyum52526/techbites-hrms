@@ -1,12 +1,15 @@
 import { prisma } from "@/lib/prisma";
 import { setSalaryStructure, generatePayslip } from "@/app/actions/payroll";
 import { Banknote, DollarSign, Receipt, CreditCard, Sparkles } from "lucide-react";
+import { getActiveCompanyId, employeeScope } from "@/lib/company";
 
 export default async function PayrollPage() {
   const currentMonth = "September 2026";
+  const activeCompanyId = await getActiveCompanyId();
 
   const [employees, payrollRecords] = await Promise.all([
     prisma.employee.findMany({
+      where: employeeScope(activeCompanyId),
       include: {
         salaryStructure: true,
         department: true,
@@ -14,7 +17,10 @@ export default async function PayrollPage() {
       orderBy: { createdAt: "desc" },
     }),
     prisma.payrollRecord.findMany({
-      where: { month: currentMonth },
+      // Payslips generated before companies existed have no companyId, so fall back to the employee's company.
+      where: activeCompanyId
+        ? { month: currentMonth, OR: [{ companyId: activeCompanyId }, { companyId: null, employee: { companyId: activeCompanyId } }] }
+        : { month: currentMonth },
       include: { employee: true },
       orderBy: { createdAt: "desc" },
     }),

@@ -2,6 +2,20 @@
 
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
+import { getActiveCompanyId } from "@/lib/company";
+
+/** Blocks payroll changes for employees outside the company selected in the switcher. */
+async function getEmployeeInActiveCompany(employeeId: string) {
+  const [employee, activeCompanyId] = await Promise.all([
+    prisma.employee.findUnique({ where: { id: employeeId }, select: { id: true, companyId: true } }),
+    getActiveCompanyId(),
+  ]);
+  if (!employee) throw new Error("Employee not found");
+  if (activeCompanyId && employee.companyId !== activeCompanyId) {
+    throw new Error("Employee does not belong to the selected company");
+  }
+  return employee;
+}
 
 export async function setSalaryStructure(formData: FormData) {
   const employeeId = formData.get("employeeId") as string;
@@ -11,6 +25,7 @@ export async function setSalaryStructure(formData: FormData) {
   const taxDeduction = parseFloat((formData.get("taxDeduction") as string) || "0");
 
   if (!employeeId || isNaN(basicSalary)) throw new Error("Invalid salary parameters");
+  await getEmployeeInActiveCompany(employeeId);
 
   await prisma.salaryStructure.upsert({
     where: { employeeId },
@@ -22,6 +37,8 @@ export async function setSalaryStructure(formData: FormData) {
 }
 
 export async function generatePayslip(employeeId: string, month: string) {
+  const employee = await getEmployeeInActiveCompany(employeeId);
+
   const structure = await prisma.salaryStructure.findUnique({ where: { employeeId } });
   if (!structure) throw new Error("Salary structure not defined for employee");
 
@@ -29,10 +46,12 @@ export async function generatePayslip(employeeId: string, month: string) {
   const deductions = structure.taxDeduction;
   const netSalary = structure.basicSalary + allowances - deductions;
 
+  // companyId is snapshotted so historic payslips stay with the company that paid them.
   await prisma.payrollRecord.upsert({
     where: { employeeId_month: { employeeId, month } },
     create: {
       employeeId,
+      companyId: employee.companyId,
       month,
       basicSalary: structure.basicSalary,
       allowances,
@@ -41,6 +60,7 @@ export async function generatePayslip(employeeId: string, month: string) {
       status: "GENERATED",
     },
     update: {
+      companyId: employee.companyId,
       basicSalary: structure.basicSalary,
       allowances,
       deductions,
