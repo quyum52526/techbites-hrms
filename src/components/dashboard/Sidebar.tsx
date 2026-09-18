@@ -17,6 +17,7 @@ import {
 import { clsx } from "clsx";
 import type { Role } from "@prisma/client";
 import { roleLabels } from "@/lib/auth-shared";
+import { MobileNavDrawer } from "@/components/dashboard/MobileNav";
 
 export const navItems = [
   { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard, roles: ["SUPER_ADMIN", "HR_ADMIN", "TEAM_LEADER", "EMPLOYEE"] },
@@ -35,14 +36,17 @@ function isActiveRoute(pathname: string, href: string) {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
-export default function Sidebar({ user }: { user: { email: string; role: Role } }) {
+type SidebarUser = { email: string; role: Role };
+
+/** Brand, navigation and profile; shared by the desktop sidebar and the mobile drawer. */
+function SidebarPanel({ user }: { user: SidebarUser }) {
   const pathname = usePathname();
   const initials = user.email.slice(0, 2).toUpperCase();
 
   return (
-    <aside className="w-64 bg-linear-to-b from-sidebar to-sidebar-deep text-slate-100 flex flex-col shrink-0 min-h-screen border-r border-white/5">
+    <div className="flex h-full min-h-full flex-col bg-linear-to-b from-sidebar to-sidebar-deep text-slate-100">
       {/* Brand Header: the logo's violet wordmark is unreadable on navy, so it sits on a white plate. */}
-      <div className="h-16 flex items-center px-4 border-b border-white/5">
+      <div className="h-16 flex items-center px-4 border-b border-white/5 shrink-0">
         <Link
           href="/dashboard"
           aria-label="TechBites HRMS home"
@@ -80,7 +84,7 @@ export default function Sidebar({ user }: { user: { email: string; role: Role } 
               {isActive && (
                 <span aria-hidden className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-1 rounded-r-full bg-linear-to-b from-brand-400 to-accent-400" />
               )}
-              <Icon className={clsx("w-4 h-4", isActive && "text-brand-400")} />
+              <Icon className={clsx("w-4 h-4", isActive && "text-brand-400")} aria-hidden />
               <span>{item.label}</span>
             </Link>
           );
@@ -88,7 +92,7 @@ export default function Sidebar({ user }: { user: { email: string; role: Role } 
       </nav>
 
       {/* System Status / Bottom Profile */}
-      <div className="p-4 border-t border-white/5 flex items-center gap-3">
+      <div className="p-4 border-t border-white/5 flex items-center gap-3 shrink-0">
         <div className="w-8 h-8 rounded-full bg-linear-to-br from-brand-600 to-accent-700 flex items-center justify-center text-xs font-bold text-white">
           {initials}
         </div>
@@ -97,6 +101,23 @@ export default function Sidebar({ user }: { user: { email: string; role: Role } 
           <p className="text-[11px] text-brand-400">{roleLabels[user.role]}</p>
         </div>
       </div>
-    </aside>
+    </div>
+  );
+}
+
+export default function Sidebar({ user }: { user: SidebarUser }) {
+  return (
+    <>
+      {/* Desktop: fixed column from `lg` up. */}
+      <aside className="hidden lg:flex w-64 shrink-0 overflow-y-auto border-r border-white/5 bg-sidebar-deep">
+        <div className="w-full min-h-full">
+          <SidebarPanel user={user} />
+        </div>
+      </aside>
+      {/* Below `lg`: the same panel in a slide-out drawer opened from the TopNav hamburger. */}
+      <MobileNavDrawer>
+        <SidebarPanel user={user} />
+      </MobileNavDrawer>
+    </>
   );
 }

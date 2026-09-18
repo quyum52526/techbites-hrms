@@ -174,10 +174,12 @@ export default function CommandPalette({ role }: { role: Role }) {
         onClick={open}
         aria-haspopup="dialog"
         aria-keyshortcuts="Meta+K Control+K"
-        className="group flex w-full max-w-80 items-center gap-2 rounded-lg border border-slate-300 bg-surface-muted px-3 py-2 text-xs text-slate-600 transition-colors duration-200 hover:border-brand-300 hover:bg-white"
+        aria-label="Search employees, pages and actions"
+        className="group flex sm:w-full max-w-80 items-center gap-2 rounded-lg border border-control bg-surface-muted p-2 sm:px-3 text-xs text-slate-600 transition-colors duration-200 hover:border-brand-600 hover:bg-white"
       >
         <Search className="w-4 h-4 text-slate-500 group-hover:text-brand-600" aria-hidden />
-        <span className="flex-1 truncate text-left">Search employees, pages, actions…</span>
+        {/* Phones get an icon-only trigger; the aria-label keeps its name. */}
+        <span aria-hidden className="hidden sm:block flex-1 truncate text-left">Search employees, pages, actions…</span>
         <kbd className="hidden sm:inline-flex items-center rounded border border-slate-300 bg-white px-1.5 py-0.5 font-mono text-[11px] font-semibold text-slate-600">
           {isMac ? "⌘" : "Ctrl"} K
         </kbd>

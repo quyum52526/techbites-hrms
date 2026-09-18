@@ -1,10 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { Building, Pencil, Plus, Trash2, X } from "lucide-react";
+import { Building, Pencil, Plus, Trash2 } from "lucide-react";
 import { clsx } from "clsx";
 import { createCompany, deleteCompany, updateCompany } from "@/app/actions/company";
 import CompanyLogo from "@/components/dashboard/CompanyLogo";
+import Modal, { ModalActions, primaryButtonClass, secondaryButtonClass } from "@/components/ui/Modal";
+import FormField, { controlClass } from "@/components/ui/FormField";
 
 interface Company {
   id: string;
@@ -21,9 +23,6 @@ interface Company {
 
 type ModalState = { mode: "create" } | { mode: "edit"; company: Company } | null;
 
-const inputClass =
-  "w-full border border-slate-200 rounded-lg p-2 text-slate-900 bg-white font-medium placeholder:text-slate-500 placeholder:font-normal focus:ring-2 focus:ring-brand-600 outline-none";
-const labelClass = "block text-slate-600 font-medium mb-1";
 
 export default function CompanyManager({ companies }: { companies: Company[] }) {
   const [modal, setModal] = useState<ModalState>(null);
@@ -45,7 +44,7 @@ export default function CompanyManager({ companies }: { companies: Company[] }) 
     setError(null);
   };
 
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (e: React.SubmitEvent<HTMLFormElement>) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
@@ -159,143 +158,84 @@ export default function CompanyManager({ companies }: { companies: Company[] }) 
         </div>
       )}
 
-      {modal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-lg border border-slate-200 overflow-hidden">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
-              <h3 className="font-semibold text-slate-800 text-sm">
-                {editing ? `Edit ${editing.name}` : "Add Company / Sister Concern"}
-              </h3>
-              <button onClick={closeModal} className="text-slate-500 hover:text-slate-600">
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            {/* key resets the uncontrolled defaults when switching between companies */}
-            <form key={editing?.id ?? "create"} onSubmit={handleSubmit} autoComplete="off" className="p-6 space-y-4 text-xs">
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div className="sm:col-span-2">
-                  <label className={labelClass}>Company Name *</label>
-                  <input
-                    name="name"
-                    required
-                    autoComplete="off"
-                    defaultValue={editing?.name}
-                    placeholder="TechBites Media"
-                    className={inputClass}
-                  />
-                </div>
-                <div>
-                  <label className={labelClass}>Short Code *</label>
-                  <input
-                    name="code"
-                    required
-                    maxLength={10}
-                    autoComplete="off"
-                    defaultValue={editing?.code}
-                    placeholder="TBM"
-                    className={clsx(inputClass, "font-mono uppercase")}
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className={labelClass}>Company Logo URL</label>
-                <div className="flex items-center gap-2.5">
-                  <CompanyLogo name={editing?.name ?? "New Company"} logoUrl={logoPreview.trim() || null} className="w-9 h-9" />
-                  <input
-                    name="logoUrl"
-                    autoComplete="off"
-                    value={logoPreview}
-                    onChange={(e) => setLogoPreview(e.target.value)}
-                    placeholder="Optional, e.g. /logos/lmt.png or https://..."
-                    className={inputClass}
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className={labelClass}>BIN / Tax ID</label>
-                <input
-                  name="binNumber"
-                  autoComplete="off"
-                  defaultValue={editing?.binNumber ?? ""}
-                  placeholder="Optional"
-                  className={clsx(inputClass, "font-mono")}
-                />
-              </div>
-
-              <div>
-                <label className={labelClass}>Address</label>
-                <textarea
-                  name="address"
-                  rows={2}
-                  autoComplete="off"
-                  defaultValue={editing?.address ?? ""}
-                  placeholder="Optional"
-                  className={clsx(inputClass, "resize-none")}
-                />
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className={labelClass}>Phone</label>
-                  <input
-                    name="phone"
-                    type="tel"
-                    autoComplete="off"
-                    defaultValue={editing?.phone ?? ""}
-                    placeholder="Optional"
-                    className={inputClass}
-                  />
-                </div>
-                <div>
-                  <label className={labelClass}>Email</label>
-                  <input
-                    name="email"
-                    type="email"
-                    autoComplete="off"
-                    defaultValue={editing?.email ?? ""}
-                    placeholder="Optional"
-                    className={inputClass}
-                  />
-                </div>
-              </div>
-
-              <label className="flex items-start gap-2 p-3 rounded-lg border border-slate-200 bg-slate-50 cursor-pointer">
-                <input type="checkbox" name="isParent" defaultChecked={editing?.isParent} className="mt-0.5 accent-brand-600" />
-                <span>
-                  <span className="block font-medium text-slate-700">Parent company</span>
-                  <span className="block text-[11px] text-slate-500">Only one parent is allowed — the current parent becomes a sister concern.</span>
-                </span>
-              </label>
-
-              {error && (
-                <p className="px-3 py-2 rounded-lg bg-red-100 text-black font-semibold border border-red-300">
-                  {error}
-                </p>
-              )}
-
-              <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
-                <button
-                  type="button"
-                  onClick={closeModal}
-                  className="px-4 py-2 border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="px-4 py-2 bg-brand-600 hover:bg-brand-700 disabled:opacity-60 text-white rounded-lg font-semibold"
-                >
-                  {loading ? "Saving..." : editing ? "Save Changes" : "Create Company"}
-                </button>
-              </div>
-            </form>
+      <Modal
+        open={modal !== null}
+        onClose={closeModal}
+        size="lg"
+        title={editing ? `Edit ${editing.name}` : "Add Company / Sister Concern"}
+      >
+        {/* key resets the uncontrolled defaults when switching between companies */}
+        <form key={editing?.id ?? "create"} onSubmit={handleSubmit} autoComplete="off" className="p-6 space-y-4 text-xs">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <FormField label="Company name" required className="sm:col-span-2">
+              <input name="name" autoComplete="off" defaultValue={editing?.name} placeholder="TechBites Media" className={controlClass} />
+            </FormField>
+            <FormField label="Short code" required hint="Up to 10 characters">
+              <input
+                name="code"
+                maxLength={10}
+                autoComplete="off"
+                defaultValue={editing?.code}
+                placeholder="TBM"
+                className={clsx(controlClass, "font-mono uppercase")}
+              />
+            </FormField>
           </div>
-        </div>
-      )}
+
+          <div className="flex items-start gap-2.5">
+            <CompanyLogo name={editing?.name ?? "New Company"} logoUrl={logoPreview.trim() || null} className="w-9 h-9 mt-5 shrink-0" />
+            <FormField label="Company logo URL" hint="Optional, e.g. /logos/lmt.png or https://…" className="flex-1">
+              <input
+                name="logoUrl"
+                autoComplete="off"
+                value={logoPreview}
+                onChange={(e) => setLogoPreview(e.target.value)}
+                className={controlClass}
+              />
+            </FormField>
+          </div>
+
+          <FormField label="BIN / Tax ID">
+            <input name="binNumber" autoComplete="off" defaultValue={editing?.binNumber ?? ""} placeholder="Optional" className={clsx(controlClass, "font-mono")} />
+          </FormField>
+
+          <FormField label="Address">
+            <textarea name="address" rows={2} autoComplete="off" defaultValue={editing?.address ?? ""} placeholder="Optional" className={clsx(controlClass, "resize-none")} />
+          </FormField>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <FormField label="Phone">
+              <input name="phone" type="tel" autoComplete="off" defaultValue={editing?.phone ?? ""} placeholder="Optional" className={controlClass} />
+            </FormField>
+            <FormField label="Email">
+              <input name="email" type="email" autoComplete="off" defaultValue={editing?.email ?? ""} placeholder="Optional" className={controlClass} />
+            </FormField>
+          </div>
+
+          <label className="flex items-start gap-2 p-3 rounded-lg border border-slate-200 bg-surface-muted cursor-pointer">
+            <input type="checkbox" name="isParent" defaultChecked={editing?.isParent} className="mt-0.5 w-4 h-4 accent-brand-600" />
+            <span>
+              <span className="block font-medium text-slate-800">Parent company</span>
+              <span className="block text-[11px] text-slate-600">Only one parent is allowed — the current parent becomes a sister concern.</span>
+            </span>
+          </label>
+
+          {error && (
+            <p role="alert" className="px-3 py-2 rounded-lg border border-rose-300 bg-rose-50 text-rose-800 font-medium">
+              {error}
+            </p>
+          )}
+
+          <ModalActions>
+            <button type="button" onClick={closeModal} className={secondaryButtonClass}>
+              Cancel
+            </button>
+            <button type="submit" disabled={loading} className={primaryButtonClass}>
+              {loading ? "Saving…" : editing ? "Save Changes" : "Create Company"}
+            </button>
+          </ModalActions>
+        </form>
+      </Modal>
     </div>
   );
 }

@@ -1,5 +1,6 @@
 import Sidebar from "@/components/dashboard/Sidebar";
 import TopNav from "@/components/dashboard/TopNav";
+import { MobileNavProvider } from "@/components/dashboard/MobileNav";
 import { getActiveUser } from "@/lib/auth";
 import { getActiveCompanyId } from "@/lib/company";
 import { prisma } from "@/lib/prisma";
@@ -22,15 +23,15 @@ export default async function DashboardLayout({
     : [[], null];
 
   return (
-    <div className="flex h-dvh overflow-hidden bg-surface-muted">
-      <Sidebar user={user} />
-      <div className="flex-1 flex flex-col min-w-0 overflow-y-auto">
-        <TopNav role={user.role} companies={companies} activeCompanyId={activeCompanyId} />
-        <main className="flex-1 p-6">
-          {children}
-        </main>
+    <MobileNavProvider>
+      <div className="flex h-dvh overflow-hidden bg-surface-muted">
+        <Sidebar user={user} />
+        <div className="flex-1 flex flex-col min-w-0 overflow-y-auto">
+          <TopNav role={user.role} companies={companies} activeCompanyId={activeCompanyId} />
+          <main className="flex-1 p-4 sm:p-6">{children}</main>
+        </div>
       </div>
-    </div>
+    </MobileNavProvider>
   );
 }
 export const dynamic = "force-dynamic";

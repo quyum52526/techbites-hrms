@@ -33,7 +33,7 @@ export default function CompanySwitcher({ companies, activeCompanyId }: Props) {
           const value = e.target.value || null;
           startTransition(() => setActiveCompany(value));
         }}
-        className="appearance-none pl-8 pr-7 py-1.5 max-w-52 truncate text-xs font-medium text-slate-700 bg-slate-50 border border-slate-200 rounded-md cursor-pointer hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-600 disabled:opacity-60"
+        className="appearance-none pl-8 pr-7 py-1.5 max-w-36 sm:max-w-52 truncate text-xs font-medium text-slate-700 bg-slate-50 border border-control rounded-md cursor-pointer hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-600 disabled:opacity-60"
       >
         <option value="">All Companies</option>
         {companies.map((company) => (

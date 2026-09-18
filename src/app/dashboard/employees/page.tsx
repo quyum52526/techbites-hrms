@@ -32,7 +32,7 @@ export default async function EmployeesPage({ searchParams }: { searchParams: Pr
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-xl font-bold text-slate-900">Employee Directory</h1>
           <p className="text-xs text-slate-600">
@@ -48,7 +48,7 @@ export default async function EmployeesPage({ searchParams }: { searchParams: Pr
             )}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <CsvImportModal
             buttonLabel="Bulk Import CSV"
             title="Bulk Import Employees"

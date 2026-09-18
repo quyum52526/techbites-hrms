@@ -1,8 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { UserPlus, X } from "lucide-react";
+import { UserPlus } from "lucide-react";
 import { createEmployee } from "@/app/actions/employees";
+import Modal, { ModalActions, primaryButtonClass, secondaryButtonClass } from "@/components/ui/Modal";
+import FormField, { controlClass } from "@/components/ui/FormField";
 
 interface Props {
   companies: { id: string; name: string; code: string }[];
@@ -26,7 +28,7 @@ export default function AddEmployeeModal({ companies, departments, designations,
     setIsOpen(true);
   };
 
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (e: React.SubmitEvent<HTMLFormElement>) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
@@ -45,129 +47,111 @@ export default function AddEmployeeModal({ companies, departments, designations,
   return (
     <>
       <button
+        type="button"
         onClick={openModal}
-        className="flex items-center gap-2 bg-brand-600 hover:bg-brand-700 text-white text-xs font-semibold px-4 py-2 rounded-lg shadow-sm"
+        aria-haspopup="dialog"
+        className="flex items-center gap-2 bg-brand-600 hover:bg-brand-700 text-white text-xs font-semibold px-4 py-2 rounded-lg shadow-sm transition-colors duration-200"
       >
-        <UserPlus className="w-4 h-4" /> Add Employee
+        <UserPlus className="w-4 h-4" aria-hidden /> Add Employee
       </button>
 
-      {isOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-lg border border-slate-200 overflow-hidden">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
-              <h3 className="font-semibold text-slate-800 text-sm">Add New Employee</h3>
-              <button onClick={() => setIsOpen(false)} className="text-slate-500 hover:text-slate-600">
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <form onSubmit={handleSubmit} className="p-6 space-y-4 text-xs">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-slate-600 font-medium mb-1">First Name *</label>
-                  <input name="firstName" required className="w-full border border-slate-200 rounded-lg p-2 focus:ring-2 focus:ring-brand-600 outline-none" />
-                </div>
-                <div>
-                  <label className="block text-slate-600 font-medium mb-1">Last Name *</label>
-                  <input name="lastName" required className="w-full border border-slate-200 rounded-lg p-2 focus:ring-2 focus:ring-brand-600 outline-none" />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-slate-600 font-medium mb-1">Work Email *</label>
-                  <input name="email" type="email" required className="w-full border border-slate-200 rounded-lg p-2 focus:ring-2 focus:ring-brand-600 outline-none" />
-                </div>
-                <div>
-                  <label className="block text-slate-600 font-medium mb-1">Employee Code *</label>
-                  <input name="employeeCode" placeholder="TB-002" required className="w-full border border-slate-200 rounded-lg p-2 focus:ring-2 focus:ring-brand-600 outline-none" />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-slate-600 font-medium mb-1">Company / Sister Concern</label>
-                  <select
-                    name="companyId"
-                    value={companyId}
-                    onChange={(e) => setCompanyId(e.target.value)}
-                    className="w-full border border-slate-200 rounded-lg p-2 focus:ring-2 focus:ring-brand-600 outline-none bg-white"
-                  >
-                    <option value="">Unassigned</option>
-                    {companies.map((c) => (
-                      <option key={c.id} value={c.id}>{c.name} ({c.code})</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-slate-600 font-medium mb-1">Biometric / Device ID</label>
-                  <input name="biometricId" placeholder="Optional, e.g. 10245" className="w-full border border-slate-200 rounded-lg p-2 font-mono focus:ring-2 focus:ring-brand-600 outline-none" />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-slate-600 font-medium mb-1">Department</label>
-                  <select key={companyId} name="departmentId" className="w-full border border-slate-200 rounded-lg p-2 focus:ring-2 focus:ring-brand-600 outline-none bg-white">
-                    <option value="">Select Department</option>
-                    {availableDepartments.map((d) => (
-                      <option key={d.id} value={d.id}>{d.name}{d.companyId ? "" : " (Shared)"}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-slate-600 font-medium mb-1">Designation</label>
-                  <select name="designationId" className="w-full border border-slate-200 rounded-lg p-2 focus:ring-2 focus:ring-brand-600 outline-none bg-white">
-                    <option value="">Select Designation</option>
-                    {designations.map((des) => (
-                      <option key={des.id} value={des.id}>{des.title}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-slate-600 font-medium mb-1">Phone Number</label>
-                  <input name="phone" className="w-full border border-slate-200 rounded-lg p-2 focus:ring-2 focus:ring-brand-600 outline-none" />
-                </div>
-                <div>
-                  <label className="block text-slate-600 font-medium mb-1">Employment Type</label>
-                  <select name="employmentType" className="w-full border border-slate-200 rounded-lg p-2 focus:ring-2 focus:ring-brand-600 outline-none bg-white">
-                    <option value="FULL_TIME">Full Time</option>
-                    <option value="PART_TIME">Part Time</option>
-                    <option value="CONTRACT">Contract</option>
-                    <option value="INTERN">Intern</option>
-                  </select>
-                </div>
-              </div>
-
-              {error && (
-                <p className="px-3 py-2 rounded-lg bg-red-100 text-black font-semibold border border-red-300">
-                  {error}
-                </p>
-              )}
-
-              <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
-                <button
-                  type="button"
-                  onClick={() => setIsOpen(false)}
-                  className="px-4 py-2 border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="px-4 py-2 bg-brand-600 hover:bg-brand-700 disabled:opacity-60 text-white rounded-lg font-semibold"
-                >
-                  {loading ? "Saving..." : "Create Employee"}
-                </button>
-              </div>
-            </form>
+      <Modal
+        open={isOpen}
+        onClose={() => setIsOpen(false)}
+        size="lg"
+        title="Add New Employee"
+        description="A login is created with the work email and the default password Welcome123!"
+      >
+        <form onSubmit={handleSubmit} className="p-6 space-y-4 text-xs">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <FormField label="First name" required>
+              <input name="firstName" autoComplete="off" className={controlClass} />
+            </FormField>
+            <FormField label="Last name" required>
+              <input name="lastName" autoComplete="off" className={controlClass} />
+            </FormField>
           </div>
-        </div>
-      )}
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <FormField label="Work email" required>
+              <input name="email" type="email" autoComplete="off" className={controlClass} />
+            </FormField>
+            <FormField label="Employee code" required hint="Unique, e.g. TB-002">
+              <input name="employeeCode" autoComplete="off" className={`${controlClass} font-mono`} />
+            </FormField>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <FormField label="Company / sister concern">
+              <select name="companyId" value={companyId} onChange={(e) => setCompanyId(e.target.value)} className={controlClass}>
+                <option value="">Unassigned</option>
+                {companies.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name} ({c.code})
+                  </option>
+                ))}
+              </select>
+            </FormField>
+            <FormField label="Biometric / device ID" hint="Must match the ID on the punch device">
+              <input name="biometricId" autoComplete="off" placeholder="Optional, e.g. 10245" className={`${controlClass} font-mono`} />
+            </FormField>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <FormField label="Department">
+              {/* key resets the choice when the company (and so the department list) changes */}
+              <select key={companyId} name="departmentId" className={controlClass}>
+                <option value="">Select department</option>
+                {availableDepartments.map((d) => (
+                  <option key={d.id} value={d.id}>
+                    {d.name}
+                    {d.companyId ? "" : " (Shared)"}
+                  </option>
+                ))}
+              </select>
+            </FormField>
+            <FormField label="Designation">
+              <select name="designationId" className={controlClass}>
+                <option value="">Select designation</option>
+                {designations.map((des) => (
+                  <option key={des.id} value={des.id}>
+                    {des.title}
+                  </option>
+                ))}
+              </select>
+            </FormField>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <FormField label="Phone number">
+              <input name="phone" type="tel" autoComplete="off" className={controlClass} />
+            </FormField>
+            <FormField label="Employment type">
+              <select name="employmentType" className={controlClass}>
+                <option value="FULL_TIME">Full time</option>
+                <option value="PART_TIME">Part time</option>
+                <option value="CONTRACT">Contract</option>
+                <option value="INTERN">Intern</option>
+              </select>
+            </FormField>
+          </div>
+
+          {error && (
+            <p role="alert" className="px-3 py-2 rounded-lg border border-rose-300 bg-rose-50 text-rose-800 font-medium">
+              {error}
+            </p>
+          )}
+
+          <ModalActions>
+            <button type="button" onClick={() => setIsOpen(false)} className={secondaryButtonClass}>
+              Cancel
+            </button>
+            <button type="submit" disabled={loading} className={primaryButtonClass}>
+              {loading ? "Saving…" : "Create Employee"}
+            </button>
+          </ModalActions>
+        </form>
+      </Modal>
     </>
   );
 }

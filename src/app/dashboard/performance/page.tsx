@@ -11,9 +11,9 @@ export default async function PerformancePage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div><h2 className="text-xl font-bold text-slate-800">Performance Reviews</h2><p className="text-xs text-slate-500">Track attendance and structured team evaluations</p></div>
-        <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs"><CalendarDays className="w-4 h-4 text-brand-600" /><select defaultValue={cycle?.id} className="bg-transparent outline-none">{cycles.map((item) => <option key={item.id} value={item.id}>{item.title} · {item.period}</option>)}</select></div>
+        <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs"><CalendarDays className="w-4 h-4 text-brand-600" /><select aria-label="Review cycle" defaultValue={cycle?.id} className="bg-transparent outline-none">{cycles.map((item) => <option key={item.id} value={item.id}>{item.title} · {item.period}</option>)}</select></div>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm"><Gauge className="w-5 h-5 text-brand-600 mb-3" /><p className="text-xs text-slate-500">Active Cycle</p><p className="font-bold text-slate-900 mt-1">{cycle?.title ?? "No cycle yet"}</p></div>
