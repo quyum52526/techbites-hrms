@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ArrowUpRight, type LucideIcon } from "lucide-react";
 import { clsx } from "clsx";
+import { cardShellClass } from "@/components/ui/styles";
 
 type Tone = "brand" | "accent" | "warning" | "success";
 
@@ -25,7 +26,7 @@ interface StatCardProps {
   className?: string;
 }
 
-const tileClass = "relative flex flex-col gap-3 bg-white p-5 rounded-xl border shadow-sm";
+const tileClass = clsx(cardShellClass, "relative flex flex-col gap-3 p-5");
 
 /** KPI tile that drills down into the filtered list behind the number. */
 export default function StatCard({ label, value, href, icon: Icon, tone, badge, hint, active = false, className }: StatCardProps) {
@@ -40,7 +41,7 @@ export default function StatCard({ label, value, href, icon: Icon, tone, badge, 
         </div>
         {href && (
           <ArrowUpRight
-            className="w-4 h-4 text-slate-400 transition-colors duration-200 group-hover:text-brand-600"
+            className="w-4 h-4 text-slate-500 transition-colors duration-200 group-hover:text-brand-600"
             aria-hidden
           />
         )}
@@ -60,7 +61,8 @@ export default function StatCard({ label, value, href, icon: Icon, tone, badge, 
     </>
   );
 
-  if (!href) return <div className={clsx(tileClass, "border-slate-200", className)}>{body}</div>;
+  // Static tile (no drill-down for this role): default cursor, no hover lift or arrow, so it never reads as a broken link.
+  if (!href) return <div className={clsx(tileClass, "border-slate-200 cursor-default", className)}>{body}</div>;
 
   return (
     <Link
@@ -68,8 +70,9 @@ export default function StatCard({ label, value, href, icon: Icon, tone, badge, 
       aria-current={active ? "true" : undefined}
       className={clsx(
         tileClass,
-        "group transition-[transform,box-shadow,border-color] duration-200 hover:shadow-md motion-safe:hover:-translate-y-0.5",
-        active ? "border-brand-600 ring-1 ring-brand-600" : "border-slate-200 hover:border-brand-200",
+        // Keyboard focus uses the global :focus-visible outline (2px brand-600, 2px offset) from globals.css.
+        "group transition-[transform,box-shadow,border-color] duration-200 ease-in-out hover:shadow-md motion-safe:hover:-translate-y-0.5",
+        active ? "border-brand-600 ring-1 ring-brand-600" : "border-slate-200 hover:border-brand-600/40",
         className
       )}
     >

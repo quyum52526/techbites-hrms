@@ -24,6 +24,24 @@ export async function getActiveCompanyId(): Promise<string | null> {
   return company?.id ?? null;
 }
 
+/** Whether the role follows the TopNav company switcher (selected company, or all companies). */
+export function canSwitchCompany(role: Role) {
+  return companySwitcherRoles.includes(role);
+}
+
+/**
+ * Company on the signed-in user's own employee record. Roles without the switcher are pinned to it;
+ * null means "no company", which callers must treat as no data, never as "all companies".
+ */
+export async function getOwnCompanyId(employeeId: string | null): Promise<string | null> {
+  if (!employeeId) return null;
+  const employee = await prisma.employee.findUnique({ where: { id: employeeId }, select: { companyId: true } });
+  return employee?.companyId ?? null;
+}
+
+/** Matches nothing: the scope for a pinned role whose employee record has no company. */
+export const NO_EMPLOYEES: Prisma.EmployeeWhereInput = { id: { in: [] } };
+
 export function employeeScope(companyId: string | null): Prisma.EmployeeWhereInput {
   return companyId ? { companyId } : {};
 }

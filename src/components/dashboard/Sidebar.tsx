@@ -20,13 +20,13 @@ import { roleLabels } from "@/lib/auth-shared";
 import { MobileNavDrawer } from "@/components/dashboard/MobileNav";
 
 export const navItems = [
-  { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard, roles: ["SUPER_ADMIN", "HR_ADMIN", "TEAM_LEADER", "EMPLOYEE"] },
+  { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard, roles: ["SUPER_ADMIN", "HR_ADMIN", "MANAGER", "TEAM_LEADER", "EMPLOYEE"] },
   { label: "Employees", href: "/dashboard/employees", icon: Users, roles: ["SUPER_ADMIN", "HR_ADMIN"] },
   { label: "Attendance", href: "/dashboard/attendance", icon: Clock, roles: ["SUPER_ADMIN", "HR_ADMIN", "TEAM_LEADER", "EMPLOYEE"] },
   { label: "Leave Requests", href: "/dashboard/leaves", icon: CalendarDays, roles: ["SUPER_ADMIN", "HR_ADMIN", "EMPLOYEE"] },
   { label: "Payroll", href: "/dashboard/payroll", icon: CreditCard, roles: ["SUPER_ADMIN", "HR_ADMIN", "EMPLOYEE"] },
   { label: "Departments", href: "/dashboard/departments", icon: Building2, roles: ["SUPER_ADMIN", "HR_ADMIN"] },
-  { label: "Reports & BI", href: "/dashboard/reports", icon: BarChart3, roles: ["SUPER_ADMIN", "HR_ADMIN"] },
+  { label: "Reports & BI", href: "/dashboard/reports", icon: BarChart3, roles: ["SUPER_ADMIN", "HR_ADMIN", "MANAGER"] },
   { label: "Performance", href: "/dashboard/performance", icon: Gauge, roles: ["SUPER_ADMIN", "HR_ADMIN", "TEAM_LEADER"] },
   { label: "Settings", href: "/dashboard/settings", icon: Settings, roles: ["SUPER_ADMIN", "HR_ADMIN"] },
 ];
@@ -74,11 +74,13 @@ function SidebarPanel({ user }: { user: SidebarUser }) {
               key={item.href}
               href={item.href}
               aria-current={isActive ? "page" : undefined}
+              // Every item shares these literal class strings (no per-item or interpolated classes), so hover and
+              // focus look identical on all links. brand-400 focus outline: the global brand-600 one is too dark on navy.
               className={clsx(
-                "relative flex items-center gap-3 px-3 py-2.5 rounded-lg text-xs font-medium transition-colors duration-200",
+                "relative flex items-center gap-3 px-3 py-2.5 rounded-lg text-xs font-medium cursor-pointer transition-colors duration-150 focus-visible:outline-brand-400",
                 isActive
                   ? "bg-linear-to-r from-brand-500/20 to-accent-500/20 text-white ring-1 ring-brand-400/30 shadow-[0_0_18px_-4px_rgb(0_174_239/0.55)]"
-                  : "text-slate-400 hover:text-slate-100 hover:bg-white/5"
+                  : "text-slate-400 hover:bg-slate-800/60 hover:text-white"
               )}
             >
               {isActive && (

@@ -1,11 +1,19 @@
 import { prisma } from "@/lib/prisma";
 import { Users, Clock, CalendarCheck2, Building2, UserPlus, Fingerprint, UserX } from "lucide-react";
-import type { EmployeeStatus } from "@prisma/client";
+import { Role, type EmployeeStatus, type Prisma } from "@prisma/client";
 import QuickPunch from "@/components/dashboard/QuickPunch";
 import StatCard from "@/components/dashboard/StatCard";
 import Link from "next/link";
 import { canAccess, getActiveUser } from "@/lib/auth";
-import { getActiveCompanyId, employeeScope, departmentScope, workforceScope } from "@/lib/company";
+import {
+  NO_EMPLOYEES,
+  canSwitchCompany,
+  departmentScope,
+  employeeScope,
+  getActiveCompanyId,
+  getOwnCompanyId,
+  workforceScope,
+} from "@/lib/company";
 import { DEFAULT_SHIFT_POLICY, ORG_UTC_OFFSET_MINUTES, orgToday } from "@/lib/attendance-time";
 import { checkedInWhere, notPunchedInWhere, onLeaveWhere } from "@/lib/attendance-views";
 
@@ -21,16 +29,19 @@ export default async function DashboardPage() {
   const today = orgToday();
   const monthStart = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), 1) - ORG_UTC_OFFSET_MINUTES * 60_000);
 
-  const [user, activeCompanyId] = await Promise.all([getActiveUser(), getActiveCompanyId()]);
+  const user = await getActiveUser();
   const isHr = canAccess(user.role, "hr");
+  // Managers see company totals here but can't open the Leaves/Attendance lists behind them, so their tiles stay static.
+  const canDrillDown = user.role !== Role.MANAGER;
 
-  // Roles without the company switcher always see their own company's figures, not the whole group's.
-  const ownEmployee = user.employeeId
-    ? await prisma.employee.findUnique({ where: { id: user.employeeId }, select: { companyId: true } })
-    : null;
-  const companyId = isHr ? activeCompanyId : ownEmployee?.companyId ?? null;
-  const employeeWhere = employeeScope(companyId);
-  const workforceWhere = workforceScope(companyId);
+  // Switcher roles follow the selected company (or all). Everyone else, managers included, is pinned to the
+  // company on their own employee record; with no company they get an empty scope, never the whole group's data.
+  const switcher = canSwitchCompany(user.role);
+  const companyId = switcher ? await getActiveCompanyId() : await getOwnCompanyId(user.employeeId);
+  const hasNoCompany = !switcher && !companyId;
+  const employeeWhere = hasNoCompany ? NO_EMPLOYEES : employeeScope(companyId);
+  const workforceWhere = hasNoCompany ? NO_EMPLOYEES : workforceScope(companyId);
+  const departmentWhere: Prisma.DepartmentWhereInput = hasNoCompany ? { id: { in: [] } } : departmentScope(companyId);
 
   const [
     headcount,
@@ -46,7 +57,7 @@ export default async function DashboardPage() {
   ] = await Promise.all([
     prisma.employee.count({ where: workforceWhere }),
     prisma.employee.count({ where: { ...workforceWhere, joiningDate: { gte: monthStart } } }),
-    prisma.department.count({ where: departmentScope(companyId) }),
+    prisma.department.count({ where: departmentWhere }),
     prisma.leaveRequest.count({ where: { status: "PENDING", employee: employeeWhere } }),
     prisma.employee.findMany({
       where: employeeWhere,
@@ -88,7 +99,13 @@ export default async function DashboardPage() {
         )}
       </div>
 
-      {/* Metrics Row: every tile drills into the list behind its number. */}
+      {hasNoCompany && (
+        <p role="status" className="px-3 py-2 rounded-lg border border-amber-200 bg-amber-50 text-xs font-medium text-amber-800">
+          Your account is not linked to a company yet, so company figures are empty. Ask an administrator to assign one.
+        </p>
+      )}
+
+      {/* Metrics Row: tiles drill into the list behind their number where the role can open that list. */}
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4">
         <StatCard
           label="Headcount"
@@ -113,7 +130,7 @@ export default async function DashboardPage() {
           value={pendingLeaves}
           icon={CalendarCheck2}
           tone="warning"
-          href="/dashboard/leaves?status=PENDING"
+          href={canDrillDown ? "/dashboard/leaves?status=PENDING" : undefined}
           badge={pendingLeaves > 0 ? { label: "Needs review", tone: "warning" } : { label: "All clear", tone: "success" }}
         />
         <StatCard
@@ -126,7 +143,7 @@ export default async function DashboardPage() {
           }
           icon={Clock}
           tone="success"
-          href="/dashboard/attendance?date=today&filter=checked-in"
+          href={canDrillDown ? "/dashboard/attendance?date=today&filter=checked-in" : undefined}
           badge={{ label: `${attendanceRate}% present`, tone: attendanceRate >= 80 ? "success" : "warning" }}
         />
         <StatCard
@@ -134,7 +151,7 @@ export default async function DashboardPage() {
           value={notPunchedToday}
           icon={UserX}
           tone="brand"
-          href="/dashboard/attendance?date=today&filter=not-punched-in"
+          href={canDrillDown ? "/dashboard/attendance?date=today&filter=not-punched-in" : undefined}
           badge={notPunchedToday > 0 ? { label: "Follow up", tone: "warning" } : { label: "Everyone in", tone: "success" }}
           hint={`${onLeaveToday} on approved leave`}
         />

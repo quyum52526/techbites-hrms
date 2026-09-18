@@ -4,6 +4,7 @@ import { useState, useEffect, useTransition } from "react";
 import { LogIn, LogOut, CheckCircle2, Loader2, Clock } from "lucide-react";
 import { clsx } from "clsx";
 import { toggleAttendance } from "@/app/actions/attendance";
+import { cardClass } from "@/components/ui/styles";
 
 const ORG_TIME_ZONE = "Asia/Dhaka";
 
@@ -78,7 +79,7 @@ export default function QuickPunch({ checkIn, checkOut, shiftName, shiftStart, s
   return (
     <section
       aria-labelledby="quick-punch-title"
-      className="relative overflow-hidden bg-white rounded-xl border border-slate-200 shadow-sm"
+      className={clsx(cardClass, "relative overflow-hidden")}
     >
       {/* Brand hairline */}
       <div aria-hidden className="h-1 bg-brand-gradient" />
@@ -88,23 +89,25 @@ export default function QuickPunch({ checkIn, checkOut, shiftName, shiftStart, s
           <h2 id="quick-punch-title" className="text-xs font-semibold uppercase tracking-wider text-slate-600">
             Quick Punch
           </h2>
+          {/* role="status": the label changes after a punch, so screen readers hear the new state. */}
           <span
+            role="status"
             className={clsx(
-              "inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-semibold",
-              state === "on-shift" && "bg-brand-50 text-brand-700",
-              state === "done" && "bg-accent-50 text-accent-700",
-              state === "idle" && "bg-slate-100 text-slate-600"
+              "inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-semibold ring-1 transition-colors duration-200",
+              state === "on-shift" && "bg-emerald-50 text-emerald-700 ring-emerald-200",
+              state === "done" && "bg-accent-50 text-accent-700 ring-accent-200",
+              state === "idle" && "bg-slate-100 text-slate-600 ring-slate-200"
             )}
           >
-            <span
-              aria-hidden
-              className={clsx(
-                "w-1.5 h-1.5 rounded-full",
-                state === "on-shift" && "bg-brand-500 motion-safe:animate-pulse",
-                state === "done" && "bg-accent-600",
-                state === "idle" && "bg-slate-400"
-              )}
-            />
+            {state === "on-shift" ? (
+              // Live dot: a solid core plus an expanding ping ring and soft glow. Reduced motion keeps the static dot.
+              <span aria-hidden className="relative flex h-2 w-2">
+                <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-500 opacity-75 motion-safe:animate-ping" />
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500 shadow-[0_0_0_3px_rgb(16_185_129/0.2)]" />
+              </span>
+            ) : (
+              <span aria-hidden className={clsx("h-2 w-2 rounded-full", state === "done" ? "bg-accent-600" : "bg-slate-500")} />
+            )}
             {state === "on-shift" ? "Punched in" : state === "done" ? "Shift complete" : "Not punched in"}
           </span>
         </div>
