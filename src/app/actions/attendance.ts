@@ -15,7 +15,13 @@ import {
   parsePunchTimestamp,
 } from "@/lib/attendance-time";
 
-export async function toggleAttendance(employeeId: string) {
+/** Web punch for the signed-in user's own employee record; the client never chooses whose attendance it marks. */
+export async function toggleAttendance() {
+  const user = await getActiveUser();
+  if (!user.employeeId) {
+    throw new Error("Your account is not linked to an employee record");
+  }
+  const employeeId = user.employeeId;
   const today = orgToday();
 
   const existingRecord = await prisma.attendanceRecord.findFirst({
@@ -47,6 +53,7 @@ export async function toggleAttendance(employeeId: string) {
   }
 
   revalidatePath("/dashboard");
+  revalidatePath("/dashboard/attendance");
 }
 
 const MAX_PUNCH_ROWS = 50_000;

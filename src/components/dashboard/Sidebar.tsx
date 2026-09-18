@@ -1,15 +1,16 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
-import { 
-  Users, 
-  Clock, 
-  CalendarDays, 
-  CreditCard, 
-  Building2, 
-  BarChart3, 
-  Settings, 
+import {
+  Users,
+  Clock,
+  CalendarDays,
+  CreditCard,
+  Building2,
+  BarChart3,
+  Settings,
   LayoutDashboard,
   Gauge,
 } from "lucide-react";
@@ -17,7 +18,7 @@ import { clsx } from "clsx";
 import type { Role } from "@prisma/client";
 import { roleLabels } from "@/lib/auth-shared";
 
-const navItems = [
+export const navItems = [
   { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard, roles: ["SUPER_ADMIN", "HR_ADMIN", "TEAM_LEADER", "EMPLOYEE"] },
   { label: "Employees", href: "/dashboard/employees", icon: Users, roles: ["SUPER_ADMIN", "HR_ADMIN"] },
   { label: "Attendance", href: "/dashboard/attendance", icon: Clock, roles: ["SUPER_ADMIN", "HR_ADMIN", "TEAM_LEADER", "EMPLOYEE"] },
@@ -29,38 +30,57 @@ const navItems = [
   { label: "Settings", href: "/dashboard/settings", icon: Settings, roles: ["SUPER_ADMIN"] },
 ];
 
+function isActiveRoute(pathname: string, href: string) {
+  if (href === "/dashboard") return pathname === href;
+  return pathname === href || pathname.startsWith(`${href}/`);
+}
+
 export default function Sidebar({ user }: { user: { email: string; role: Role } }) {
   const pathname = usePathname();
   const initials = user.email.slice(0, 2).toUpperCase();
 
   return (
-    <aside className="w-64 bg-slate-900 text-slate-100 flex flex-col shrink-0 min-h-screen border-r border-slate-800">
-      {/* Brand Header */}
-      <div className="h-16 flex items-center px-6 gap-3 border-b border-slate-800">
-        <img
-          src="/tech-bites-hrms-logo.png"
-          alt="TechBites HRMS"
-          className="h-9 w-auto max-w-[180px] object-contain"
-        />
+    <aside className="w-64 bg-linear-to-b from-sidebar to-sidebar-deep text-slate-100 flex flex-col shrink-0 min-h-screen border-r border-white/5">
+      {/* Brand Header: the logo's violet wordmark is unreadable on navy, so it sits on a white plate. */}
+      <div className="h-16 flex items-center px-4 border-b border-white/5">
+        <Link
+          href="/dashboard"
+          aria-label="TechBites HRMS home"
+          className="relative block h-11 w-[157px] overflow-hidden rounded-lg bg-white shadow-sm ring-1 ring-white/10"
+        >
+          {/* The PNG is a 2000px square with wide padding; offset it so the ~1395x390 artwork fills the plate. */}
+          <Image
+            src="/tech-bites-hrms-logo.png"
+            alt=""
+            width={2000}
+            height={2000}
+            priority
+            className="absolute max-w-none w-[190px] h-[190px] left-[-9px] top-[-70px]"
+          />
+        </Link>
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 px-3 py-4 space-y-1">
+      <nav aria-label="Primary" className="flex-1 px-3 py-4 space-y-1">
         {navItems.filter((item) => item.roles.includes(user.role)).map((item) => {
           const Icon = item.icon;
-          const isActive = pathname === item.href;
+          const isActive = isActiveRoute(pathname, item.href);
           return (
             <Link
               key={item.href}
               href={item.href}
+              aria-current={isActive ? "page" : undefined}
               className={clsx(
-                "flex items-center gap-3 px-3 py-2.5 rounded-lg text-xs font-medium transition-colors",
-                isActive 
-                  ? "bg-indigo-600 text-white shadow-sm" 
-                  : "text-slate-400 hover:text-slate-100 hover:bg-slate-800/60"
+                "relative flex items-center gap-3 px-3 py-2.5 rounded-lg text-xs font-medium transition-colors duration-200",
+                isActive
+                  ? "bg-linear-to-r from-brand-500/20 to-accent-500/20 text-white ring-1 ring-brand-400/30 shadow-[0_0_18px_-4px_rgb(0_174_239/0.55)]"
+                  : "text-slate-400 hover:text-slate-100 hover:bg-white/5"
               )}
             >
-              <Icon className="w-4 h-4" />
+              {isActive && (
+                <span aria-hidden className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-1 rounded-r-full bg-linear-to-b from-brand-400 to-accent-400" />
+              )}
+              <Icon className={clsx("w-4 h-4", isActive && "text-brand-400")} />
               <span>{item.label}</span>
             </Link>
           );
@@ -68,13 +88,13 @@ export default function Sidebar({ user }: { user: { email: string; role: Role } 
       </nav>
 
       {/* System Status / Bottom Profile */}
-      <div className="p-4 border-t border-slate-800 flex items-center gap-3">
-        <div className="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center text-xs font-bold text-slate-300">
+      <div className="p-4 border-t border-white/5 flex items-center gap-3">
+        <div className="w-8 h-8 rounded-full bg-linear-to-br from-brand-600 to-accent-700 flex items-center justify-center text-xs font-bold text-white">
           {initials}
         </div>
         <div className="text-xs overflow-hidden">
           <p className="font-medium truncate">{user.email}</p>
-          <p className="text-[10px] text-emerald-400">{roleLabels[user.role]}</p>
+          <p className="text-[11px] text-brand-400">{roleLabels[user.role]}</p>
         </div>
       </div>
     </aside>

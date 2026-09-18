@@ -22,7 +22,7 @@ export default async function DashboardLayout({
     : [[], null];
 
   return (
-    <div className="flex h-screen overflow-hidden bg-slate-50">
+    <div className="flex h-dvh overflow-hidden bg-surface-muted">
       <Sidebar user={user} />
       <div className="flex-1 flex flex-col min-w-0 overflow-y-auto">
         <TopNav role={user.role} companies={companies} activeCompanyId={activeCompanyId} />

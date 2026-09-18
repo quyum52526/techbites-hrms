@@ -22,7 +22,7 @@ export default function CompanyLogo({ name, logoUrl, className }: Props) {
 
   if (!logoUrl || failedUrl === logoUrl) {
     return (
-      <span aria-hidden className={clsx(base, "flex items-center justify-center font-bold text-[10px] text-indigo-700 bg-indigo-50 border-indigo-100")}>
+      <span aria-hidden className={clsx(base, "flex items-center justify-center font-bold text-[11px] text-brand-700 bg-brand-50 border-brand-100")}>
         {initialsFor(name)}
       </span>
     );

@@ -82,7 +82,7 @@ export default function CsvImportModal({ buttonLabel, title, description, column
                   <a
                     href={templateHref}
                     download
-                    className="flex items-center gap-1.5 text-indigo-700 hover:text-indigo-900 font-semibold hover:underline"
+                    className="flex items-center gap-1.5 text-brand-700 hover:text-brand-900 font-semibold hover:underline"
                   >
                     <Download className="w-3.5 h-3.5" /> Download sample template
                   </a>
@@ -94,7 +94,7 @@ export default function CsvImportModal({ buttonLabel, title, description, column
                       title={col.hint}
                       className={clsx(
                         "font-mono text-[11px] px-2 py-0.5 rounded border",
-                        col.required ? "bg-indigo-50 border-indigo-200 text-indigo-900 font-semibold" : "bg-white border-slate-200 text-slate-800"
+                        col.required ? "bg-brand-50 border-brand-200 text-brand-900 font-semibold" : "bg-white border-slate-200 text-slate-800"
                       )}
                     >
                       {col.name}
@@ -113,8 +113,8 @@ export default function CsvImportModal({ buttonLabel, title, description, column
                 )}
               </div>
 
-              <label className="flex items-center gap-3 p-4 rounded-lg border-2 border-dashed border-slate-300 hover:border-indigo-400 cursor-pointer bg-white">
-                <FileSpreadsheet className="w-6 h-6 text-indigo-600 shrink-0" />
+              <label className="flex items-center gap-3 p-4 rounded-lg border-2 border-dashed border-slate-300 hover:border-brand-400 cursor-pointer bg-white">
+                <FileSpreadsheet className="w-6 h-6 text-brand-600 shrink-0" />
                 <span className="flex-1 min-w-0">
                   <span className="block font-semibold text-slate-900 truncate">{file ? file.name : "Choose a .csv file"}</span>
                   <span className="block text-[11px] text-slate-600">
@@ -149,7 +149,7 @@ export default function CsvImportModal({ buttonLabel, title, description, column
                     <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
                       {result.stats.map((stat) => (
                         <div key={stat.label} className="rounded-lg border border-slate-200 px-3 py-2">
-                          <p className="text-[10px] text-slate-600 font-medium">{stat.label}</p>
+                          <p className="text-[11px] text-slate-600 font-medium">{stat.label}</p>
                           <p className="text-base font-bold text-slate-900 tabular-nums">{stat.value.toLocaleString()}</p>
                         </div>
                       ))}
@@ -197,7 +197,7 @@ export default function CsvImportModal({ buttonLabel, title, description, column
                 <button
                   type="submit"
                   disabled={!file || loading}
-                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-lg font-semibold"
+                  className="px-4 py-2 bg-brand-600 hover:bg-brand-700 disabled:opacity-50 text-white rounded-lg font-semibold"
                 >
                   {loading ? "Importing..." : "Upload & Import"}
                 </button>

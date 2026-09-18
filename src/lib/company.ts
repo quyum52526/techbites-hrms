@@ -1,5 +1,5 @@
 import { cookies } from "next/headers";
-import { Prisma, Role } from "@prisma/client";
+import { EmployeeStatus, Prisma, Role } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getActiveUser } from "@/lib/auth";
 
@@ -31,4 +31,11 @@ export function employeeScope(companyId: string | null): Prisma.EmployeeWhereInp
 /** Departments without a company are shared org units and stay visible in every company. */
 export function departmentScope(companyId: string | null): Prisma.DepartmentWhereInput {
   return companyId ? { OR: [{ companyId }, { companyId: null }] } : {};
+}
+
+/** Employee statuses that still count toward headcount and daily attendance. */
+export const WORKFORCE_STATUSES: EmployeeStatus[] = [EmployeeStatus.ACTIVE, EmployeeStatus.PROBATION, EmployeeStatus.NOTICE_PERIOD];
+
+export function workforceScope(companyId: string | null): Prisma.EmployeeWhereInput {
+  return { ...employeeScope(companyId), status: { in: WORKFORCE_STATUSES } };
 }

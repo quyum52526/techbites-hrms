@@ -40,7 +40,7 @@ export default async function DepartmentsPage() {
         <div className="space-y-4">
           <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
             <div className="flex items-center gap-2 mb-4 text-slate-800 font-semibold text-sm">
-              <Building2 className="w-4 h-4 text-indigo-600" />
+              <Building2 className="w-4 h-4 text-brand-600" />
               <span>Create Department</span>
             </div>
             <form action={createDepartment} className="space-y-3 text-xs">
@@ -51,7 +51,7 @@ export default async function DepartmentsPage() {
                   name="name"
                   placeholder="e.g. Finance, Marketing"
                   required
-                  className="w-full border border-slate-200 rounded-lg p-2 focus:ring-1 focus:ring-indigo-500 outline-none"
+                  className="w-full border border-slate-200 rounded-lg p-2 focus:ring-2 focus:ring-brand-600 outline-none"
                 />
               </div>
               <div>
@@ -60,7 +60,7 @@ export default async function DepartmentsPage() {
                   type="text"
                   name="description"
                   placeholder="Short role of the department"
-                  className="w-full border border-slate-200 rounded-lg p-2 focus:ring-1 focus:ring-indigo-500 outline-none"
+                  className="w-full border border-slate-200 rounded-lg p-2 focus:ring-2 focus:ring-brand-600 outline-none"
                 />
               </div>
               <div>
@@ -68,7 +68,7 @@ export default async function DepartmentsPage() {
                 <select
                   name="companyId"
                   defaultValue={activeCompanyId ?? ""}
-                  className="w-full border border-slate-200 rounded-lg p-2 focus:ring-1 focus:ring-indigo-500 outline-none bg-white"
+                  className="w-full border border-slate-200 rounded-lg p-2 focus:ring-2 focus:ring-brand-600 outline-none bg-white"
                 >
                   <option value="">Shared across all companies</option>
                   {companies.map((c) => (
@@ -78,7 +78,7 @@ export default async function DepartmentsPage() {
               </div>
               <button
                 type="submit"
-                className="w-full flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors"
+                className="w-full flex items-center justify-center gap-2 bg-brand-600 hover:bg-brand-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors"
               >
                 <Plus className="w-4 h-4" /> Add Department
               </button>
@@ -99,17 +99,17 @@ export default async function DepartmentsPage() {
                     <p className="font-semibold text-slate-900 flex items-center gap-2">
                       {dept.name}
                       {dept.company ? (
-                        <span title={dept.company.name} className="font-mono text-[10px] font-medium px-1.5 py-0.5 rounded bg-sky-50 text-sky-700">
+                        <span title={dept.company.name} className="font-mono text-[11px] font-medium px-1.5 py-0.5 rounded bg-brand-50 text-brand-700">
                           {dept.company.code}
                         </span>
                       ) : (
-                        <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-slate-100 text-slate-500">Shared</span>
+                        <span className="text-[11px] font-medium px-1.5 py-0.5 rounded bg-slate-100 text-slate-500">Shared</span>
                       )}
                     </p>
-                    <p className="text-slate-400 text-[11px] mt-0.5">{dept.description || "No description provided"}</p>
+                    <p className="text-slate-500 text-[11px] mt-0.5">{dept.description || "No description provided"}</p>
                   </div>
                   <div className="flex items-center gap-1.5 text-slate-500 bg-slate-50 border border-slate-200 px-2.5 py-1 rounded-md">
-                    <Users className="w-3.5 h-3.5 text-slate-400" />
+                    <Users className="w-3.5 h-3.5 text-slate-500" />
                     <span>{dept._count.employees} Staff</span>
                   </div>
                 </div>
@@ -122,7 +122,7 @@ export default async function DepartmentsPage() {
         <div className="space-y-4">
           <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
             <div className="flex items-center gap-2 mb-4 text-slate-800 font-semibold text-sm">
-              <Briefcase className="w-4 h-4 text-emerald-600" />
+              <Briefcase className="w-4 h-4 text-emerald-700" />
               <span>Create Designation</span>
             </div>
             <form action={createDesignation} className="space-y-3 text-xs">
@@ -133,7 +133,7 @@ export default async function DepartmentsPage() {
                   name="title"
                   placeholder="e.g. Senior Product Designer, QA Specialist"
                   required
-                  className="w-full border border-slate-200 rounded-lg p-2 focus:ring-1 focus:ring-emerald-500 outline-none"
+                  className="w-full border border-slate-200 rounded-lg p-2 focus:ring-2 focus:ring-emerald-500 outline-none"
                 />
               </div>
               <div>
@@ -142,12 +142,12 @@ export default async function DepartmentsPage() {
                   type="text"
                   name="description"
                   placeholder="Key responsibilities"
-                  className="w-full border border-slate-200 rounded-lg p-2 focus:ring-1 focus:ring-emerald-500 outline-none"
+                  className="w-full border border-slate-200 rounded-lg p-2 focus:ring-2 focus:ring-emerald-500 outline-none"
                 />
               </div>
               <button
                 type="submit"
-                className="w-full flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors"
+                className="w-full flex items-center justify-center gap-2 bg-emerald-700 hover:bg-emerald-800 text-white font-semibold py-2 px-4 rounded-lg transition-colors"
               >
                 <Plus className="w-4 h-4" /> Add Designation
               </button>
@@ -166,10 +166,10 @@ export default async function DepartmentsPage() {
                 <div key={des.id} className="p-4 flex items-center justify-between hover:bg-slate-50">
                   <div>
                     <p className="font-semibold text-slate-900">{des.title}</p>
-                    <p className="text-slate-400 text-[11px] mt-0.5">{des.description || "General designation"}</p>
+                    <p className="text-slate-500 text-[11px] mt-0.5">{des.description || "General designation"}</p>
                   </div>
                   <div className="flex items-center gap-1.5 text-slate-500 bg-slate-50 border border-slate-200 px-2.5 py-1 rounded-md">
-                    <Users className="w-3.5 h-3.5 text-slate-400" />
+                    <Users className="w-3.5 h-3.5 text-slate-500" />
                     <span>{des._count.employees} Staff</span>
                   </div>
                 </div>

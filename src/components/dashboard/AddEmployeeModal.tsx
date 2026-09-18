@@ -46,7 +46,7 @@ export default function AddEmployeeModal({ companies, departments, designations,
     <>
       <button
         onClick={openModal}
-        className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold px-4 py-2 rounded-lg shadow-sm"
+        className="flex items-center gap-2 bg-brand-600 hover:bg-brand-700 text-white text-xs font-semibold px-4 py-2 rounded-lg shadow-sm"
       >
         <UserPlus className="w-4 h-4" /> Add Employee
       </button>
@@ -56,7 +56,7 @@ export default function AddEmployeeModal({ companies, departments, designations,
           <div className="bg-white rounded-xl shadow-xl w-full max-w-lg border border-slate-200 overflow-hidden">
             <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
               <h3 className="font-semibold text-slate-800 text-sm">Add New Employee</h3>
-              <button onClick={() => setIsOpen(false)} className="text-slate-400 hover:text-slate-600">
+              <button onClick={() => setIsOpen(false)} className="text-slate-500 hover:text-slate-600">
                 <X className="w-4 h-4" />
               </button>
             </div>
@@ -65,22 +65,22 @@ export default function AddEmployeeModal({ companies, departments, designations,
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-slate-600 font-medium mb-1">First Name *</label>
-                  <input name="firstName" required className="w-full border border-slate-200 rounded-lg p-2 focus:ring-1 focus:ring-indigo-500 outline-none" />
+                  <input name="firstName" required className="w-full border border-slate-200 rounded-lg p-2 focus:ring-2 focus:ring-brand-600 outline-none" />
                 </div>
                 <div>
                   <label className="block text-slate-600 font-medium mb-1">Last Name *</label>
-                  <input name="lastName" required className="w-full border border-slate-200 rounded-lg p-2 focus:ring-1 focus:ring-indigo-500 outline-none" />
+                  <input name="lastName" required className="w-full border border-slate-200 rounded-lg p-2 focus:ring-2 focus:ring-brand-600 outline-none" />
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-slate-600 font-medium mb-1">Work Email *</label>
-                  <input name="email" type="email" required className="w-full border border-slate-200 rounded-lg p-2 focus:ring-1 focus:ring-indigo-500 outline-none" />
+                  <input name="email" type="email" required className="w-full border border-slate-200 rounded-lg p-2 focus:ring-2 focus:ring-brand-600 outline-none" />
                 </div>
                 <div>
                   <label className="block text-slate-600 font-medium mb-1">Employee Code *</label>
-                  <input name="employeeCode" placeholder="TB-002" required className="w-full border border-slate-200 rounded-lg p-2 focus:ring-1 focus:ring-indigo-500 outline-none" />
+                  <input name="employeeCode" placeholder="TB-002" required className="w-full border border-slate-200 rounded-lg p-2 focus:ring-2 focus:ring-brand-600 outline-none" />
                 </div>
               </div>
 
@@ -91,7 +91,7 @@ export default function AddEmployeeModal({ companies, departments, designations,
                     name="companyId"
                     value={companyId}
                     onChange={(e) => setCompanyId(e.target.value)}
-                    className="w-full border border-slate-200 rounded-lg p-2 focus:ring-1 focus:ring-indigo-500 outline-none bg-white"
+                    className="w-full border border-slate-200 rounded-lg p-2 focus:ring-2 focus:ring-brand-600 outline-none bg-white"
                   >
                     <option value="">Unassigned</option>
                     {companies.map((c) => (
@@ -101,14 +101,14 @@ export default function AddEmployeeModal({ companies, departments, designations,
                 </div>
                 <div>
                   <label className="block text-slate-600 font-medium mb-1">Biometric / Device ID</label>
-                  <input name="biometricId" placeholder="Optional, e.g. 10245" className="w-full border border-slate-200 rounded-lg p-2 font-mono focus:ring-1 focus:ring-indigo-500 outline-none" />
+                  <input name="biometricId" placeholder="Optional, e.g. 10245" className="w-full border border-slate-200 rounded-lg p-2 font-mono focus:ring-2 focus:ring-brand-600 outline-none" />
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-slate-600 font-medium mb-1">Department</label>
-                  <select key={companyId} name="departmentId" className="w-full border border-slate-200 rounded-lg p-2 focus:ring-1 focus:ring-indigo-500 outline-none bg-white">
+                  <select key={companyId} name="departmentId" className="w-full border border-slate-200 rounded-lg p-2 focus:ring-2 focus:ring-brand-600 outline-none bg-white">
                     <option value="">Select Department</option>
                     {availableDepartments.map((d) => (
                       <option key={d.id} value={d.id}>{d.name}{d.companyId ? "" : " (Shared)"}</option>
@@ -117,7 +117,7 @@ export default function AddEmployeeModal({ companies, departments, designations,
                 </div>
                 <div>
                   <label className="block text-slate-600 font-medium mb-1">Designation</label>
-                  <select name="designationId" className="w-full border border-slate-200 rounded-lg p-2 focus:ring-1 focus:ring-indigo-500 outline-none bg-white">
+                  <select name="designationId" className="w-full border border-slate-200 rounded-lg p-2 focus:ring-2 focus:ring-brand-600 outline-none bg-white">
                     <option value="">Select Designation</option>
                     {designations.map((des) => (
                       <option key={des.id} value={des.id}>{des.title}</option>
@@ -129,11 +129,11 @@ export default function AddEmployeeModal({ companies, departments, designations,
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-slate-600 font-medium mb-1">Phone Number</label>
-                  <input name="phone" className="w-full border border-slate-200 rounded-lg p-2 focus:ring-1 focus:ring-indigo-500 outline-none" />
+                  <input name="phone" className="w-full border border-slate-200 rounded-lg p-2 focus:ring-2 focus:ring-brand-600 outline-none" />
                 </div>
                 <div>
                   <label className="block text-slate-600 font-medium mb-1">Employment Type</label>
-                  <select name="employmentType" className="w-full border border-slate-200 rounded-lg p-2 focus:ring-1 focus:ring-indigo-500 outline-none bg-white">
+                  <select name="employmentType" className="w-full border border-slate-200 rounded-lg p-2 focus:ring-2 focus:ring-brand-600 outline-none bg-white">
                     <option value="FULL_TIME">Full Time</option>
                     <option value="PART_TIME">Part Time</option>
                     <option value="CONTRACT">Contract</option>
@@ -159,7 +159,7 @@ export default function AddEmployeeModal({ companies, departments, designations,
                 <button
                   type="submit"
                   disabled={loading}
-                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white rounded-lg font-semibold"
+                  className="px-4 py-2 bg-brand-600 hover:bg-brand-700 disabled:opacity-60 text-white rounded-lg font-semibold"
                 >
                   {loading ? "Saving..." : "Create Employee"}
                 </button>

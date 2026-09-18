@@ -11,7 +11,7 @@ import PayslipModal, { type PayslipData } from "@/components/dashboard/PayslipMo
 import { PayrollControls, PayrollStatusSelect } from "@/components/dashboard/PayrollControls";
 
 const inputClass =
-  "w-full border border-slate-300 rounded-lg p-2 text-slate-900 bg-white font-medium placeholder:text-slate-400 placeholder:font-normal focus:ring-1 focus:ring-indigo-500 outline-none";
+  "w-full border border-slate-300 rounded-lg p-2 text-slate-900 bg-white font-medium placeholder:text-slate-500 placeholder:font-normal focus:ring-2 focus:ring-brand-600 outline-none";
 const labelClass = "block text-slate-700 font-semibold mb-1";
 
 export default async function PayrollPage({ searchParams }: { searchParams: Promise<{ period?: string }> }) {
@@ -55,11 +55,11 @@ export default async function PayrollPage({ searchParams }: { searchParams: Prom
   const configuredCount = employees.filter((e) => e.salaryStructure).length;
 
   const cards = [
-    { label: `Total Payroll · ${label}`, value: formatMoney(sum(payrollRecords)), sub: `${payrollRecords.length} pay-slip(s)`, icon: Banknote, color: "text-indigo-700 bg-indigo-50" },
+    { label: `Total Payroll · ${label}`, value: formatMoney(sum(payrollRecords)), sub: `${payrollRecords.length} pay-slip(s)`, icon: Banknote, color: "text-brand-700 bg-brand-50" },
     { label: "Disbursed (Paid)", value: formatMoney(sum(paidRecords)), sub: `${paidRecords.length} paid`, icon: CheckCircle2, color: "text-emerald-700 bg-emerald-50" },
     { label: "Pending Disbursement", value: formatMoney(sum(pendingRecords)), sub: `${pendingRecords.length} not yet paid`, icon: Clock3, color: "text-amber-700 bg-amber-50" },
     ...(canManage
-      ? [{ label: "Salary Configured", value: `${configuredCount} / ${employees.length}`, sub: "employees in scope", icon: Users, color: "text-blue-700 bg-blue-50" }]
+      ? [{ label: "Salary Configured", value: `${configuredCount} / ${employees.length}`, sub: "employees in scope", icon: Users, color: "text-brand-700 bg-brand-50" }]
       : []),
   ];
 
@@ -193,7 +193,7 @@ export default async function PayrollPage({ searchParams }: { searchParams: Prom
                       <td className="py-3 px-4 text-right font-mono tabular-nums text-red-700">
                         {record.deductions > 0 ? `−${formatMoney(record.deductions)}` : formatMoney(0)}
                         {(record.lateDays > 0 || record.absentDays > 0) && (
-                          <p className="text-[10px] text-slate-600 font-sans">
+                          <p className="text-[11px] text-slate-600 font-sans">
                             {record.absentDays} absent · {record.lateDays} late
                           </p>
                         )}
@@ -273,7 +273,7 @@ export default async function PayrollPage({ searchParams }: { searchParams: Prom
 
           <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
             <h3 className="text-sm font-bold text-slate-900 mb-3 flex items-center gap-2">
-              <DollarSign className="w-4 h-4 text-indigo-600" /> Set Employee Salary Structure (monthly, ৳)
+              <DollarSign className="w-4 h-4 text-brand-600" /> Set Employee Salary Structure (monthly, ৳)
             </h3>
             <form action={setSalaryStructure} autoComplete="off" className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
               <div className="col-span-2">
@@ -309,7 +309,7 @@ export default async function PayrollPage({ searchParams }: { searchParams: Prom
                 </div>
               ))}
               <div className="col-span-2 sm:col-span-4 flex justify-end">
-                <button type="submit" className="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 px-6 rounded-lg">
+                <button type="submit" className="bg-brand-600 hover:bg-brand-700 text-white font-semibold py-2 px-6 rounded-lg">
                   Save Structure
                 </button>
               </div>

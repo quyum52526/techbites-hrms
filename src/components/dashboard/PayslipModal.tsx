@@ -97,7 +97,7 @@ export default function PayslipModal({ payslip }: { payslip: PayslipData }) {
         <div className="flex items-center justify-end gap-2 mb-3 print:hidden">
           <button
             onClick={() => window.print()}
-            className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold px-4 py-2 rounded-lg shadow-sm"
+            className="flex items-center gap-2 bg-brand-600 hover:bg-brand-700 text-white text-xs font-semibold px-4 py-2 rounded-lg shadow-sm"
           >
             <Printer className="w-4 h-4" /> Print / Download PDF
           </button>

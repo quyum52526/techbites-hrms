@@ -1,47 +1,177 @@
+import Link from "next/link";
+import { clsx } from "clsx";
+import { AttendanceStatus, Role, type Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { Calendar, CheckCircle2, AlertCircle, UserCheck } from "lucide-react";
+import { Calendar, CheckCircle2, AlertCircle, UserX, Palmtree, X } from "lucide-react";
 import { getActiveUser } from "@/lib/auth";
 import { orgToday } from "@/lib/attendance-time";
-import { getActiveCompanyId, employeeScope } from "@/lib/company";
+import { getActiveCompanyId, employeeScope, WORKFORCE_STATUSES } from "@/lib/company";
+import {
+  checkedInWhere,
+  notPunchedInWhere,
+  onLeaveWhere,
+  parseDateParam,
+  parseFilterParam,
+  parseStatusParam,
+  toDateParam,
+  type AttendanceFilter,
+} from "@/lib/attendance-views";
 import { importPunchLogsCsv } from "@/app/actions/attendance";
 import CsvImportModal from "@/components/dashboard/CsvImportModal";
+import StatCard from "@/components/dashboard/StatCard";
 
 const ORG_TIME_ZONE = "Asia/Dhaka";
+const RECENT_LIMIT = 50;
 
-export default async function AttendancePage() {
-  const today = orgToday();
+const statusBadge: Record<AttendanceStatus | "NOT_PUNCHED", { label: string; className: string }> = {
+  PRESENT: { label: "Present", className: "bg-emerald-50 text-emerald-700" },
+  LATE: { label: "Late", className: "bg-amber-50 text-amber-700" },
+  HALF_DAY: { label: "Half day", className: "bg-brand-50 text-brand-700" },
+  ABSENT: { label: "Absent", className: "bg-rose-50 text-rose-700" },
+  ON_LEAVE: { label: "On leave", className: "bg-accent-50 text-accent-700" },
+  NOT_PUNCHED: { label: "Not punched in", className: "bg-slate-100 text-slate-700" },
+};
+
+const filterLabels: Record<AttendanceFilter, string> = {
+  "checked-in": "Checked in",
+  "not-punched-in": "Not punched in",
+  "on-leave": "On approved leave",
+};
+
+type Row = {
+  key: string;
+  name: string;
+  code: string;
+  date: Date;
+  checkIn: Date | null;
+  checkOut: Date | null;
+  status: keyof typeof statusBadge;
+  source: string | null;
+};
+
+// DATE columns come back as UTC midnight, so format them in UTC to avoid shifting the day.
+const formatDay = (date: Date) =>
+  date.toLocaleDateString("en-GB", { timeZone: "UTC", weekday: "short", day: "numeric", month: "short", year: "numeric" });
+const formatTime = (date: Date | null) =>
+  date ? date.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: ORG_TIME_ZONE }) : "—";
+
+type SearchParams = { date?: string; filter?: string; status?: string };
+
+export default async function AttendancePage({ searchParams }: { searchParams: Promise<SearchParams> }) {
+  const params = await searchParams;
+  const selectedDate = parseDateParam(params.date);
+  const filter = parseFilterParam(params.filter);
+  // Record-status filtering only applies to the attendance-record views, not the synthesized lists.
+  const status = filter === "not-punched-in" || filter === "on-leave" ? null : parseStatusParam(params.status);
+  // Filters are always about one day; without an explicit date they mean today.
+  const day = selectedDate ?? (filter || status ? orgToday() : null);
+  const cardDay = day ?? orgToday();
+
   const [user, activeCompanyId] = await Promise.all([getActiveUser(), getActiveCompanyId()]);
-  const canImport = user.role === "SUPER_ADMIN" || user.role === "HR_ADMIN";
-  // Attendance belongs to whichever company the employee is in; "All Companies" leaves this empty.
-  const employeeWhere = employeeScope(activeCompanyId);
+  const canImport = user.role === Role.SUPER_ADMIN || user.role === Role.HR_ADMIN;
 
-  const [attendances, totalEmployees, presentToday, lateToday] = await Promise.all([
-    prisma.attendanceRecord.findMany({
-      where: { employee: employeeWhere },
-      include: {
-        employee: {
-          include: {
-            department: true,
-            designation: true,
-            user: true,
-          },
-        },
-        shift: true,
-      },
-      orderBy: { date: "desc" },
-      take: 50,
-    }),
-    prisma.employee.count({ where: employeeWhere }),
-    prisma.attendanceRecord.count({ where: { date: today, status: "PRESENT", employee: employeeWhere } }),
-    prisma.attendanceRecord.count({ where: { date: today, status: "LATE", employee: employeeWhere } }),
+  // HR sees the selected company, team leads and managers their direct reports, everyone else themselves.
+  const selfId = user.employeeId ?? "__no-employee__";
+  const peopleScope: Prisma.EmployeeWhereInput = canImport
+    ? employeeScope(activeCompanyId)
+    : user.role === Role.TEAM_LEADER || user.role === Role.MANAGER
+    ? { OR: [{ id: selfId }, { managerId: selfId }] }
+    : { id: selfId };
+  const workforce: Prisma.EmployeeWhereInput = { ...peopleScope, status: { in: WORKFORCE_STATUSES } };
+
+  const recordsWhere: Prisma.AttendanceRecordWhereInput = {
+    ...(filter === "checked-in" && day ? checkedInWhere(workforce, day) : { employee: peopleScope }),
+    ...(day ? { date: day } : {}),
+    ...(status ? { status } : {}),
+  };
+
+  const employeeSelect = { firstName: true, lastName: true, employeeCode: true } as const;
+
+  const [rows, checkedInCount, lateCount, notPunchedCount, onLeaveCount] = await Promise.all([
+    (async (): Promise<Row[]> => {
+      if (filter === "not-punched-in" && day) {
+        const employees = await prisma.employee.findMany({
+          where: notPunchedInWhere(workforce, day),
+          select: { id: true, ...employeeSelect, attendances: { where: { date: day }, select: { status: true, source: true } } },
+          orderBy: { firstName: "asc" },
+        });
+        return employees.map((e) => ({
+          key: e.id,
+          name: `${e.firstName} ${e.lastName}`,
+          code: e.employeeCode,
+          date: day,
+          checkIn: null,
+          checkOut: null,
+          // A record without a check-in (e.g. marked ABSENT by HR) keeps its status; otherwise nothing was logged.
+          status: e.attendances[0]?.status ?? "NOT_PUNCHED",
+          source: e.attendances[0]?.source ?? null,
+        }));
+      }
+      if (filter === "on-leave" && day) {
+        const leaves = await prisma.leaveRequest.findMany({
+          where: onLeaveWhere(workforce, day),
+          select: { id: true, employee: { select: employeeSelect }, leaveType: { select: { name: true } } },
+          orderBy: { employee: { firstName: "asc" } },
+        });
+        return leaves.map((l) => ({
+          key: l.id,
+          name: `${l.employee.firstName} ${l.employee.lastName}`,
+          code: l.employee.employeeCode,
+          date: day,
+          checkIn: null,
+          checkOut: null,
+          status: "ON_LEAVE",
+          source: l.leaveType.name,
+        }));
+      }
+      const records = await prisma.attendanceRecord.findMany({
+        where: recordsWhere,
+        select: { id: true, date: true, checkIn: true, checkOut: true, status: true, source: true, employee: { select: employeeSelect } },
+        orderBy: day ? { employee: { firstName: "asc" } } : [{ date: "desc" }, { checkIn: "desc" }],
+        take: day ? undefined : RECENT_LIMIT,
+      });
+      return records.map((r) => ({
+        key: r.id,
+        name: `${r.employee.firstName} ${r.employee.lastName}`,
+        code: r.employee.employeeCode,
+        date: r.date,
+        checkIn: r.checkIn,
+        checkOut: r.checkOut,
+        status: r.status,
+        source: r.source,
+      }));
+    })(),
+    prisma.attendanceRecord.count({ where: checkedInWhere(workforce, cardDay) }),
+    prisma.attendanceRecord.count({ where: { date: cardDay, status: "LATE", employee: peopleScope } }),
+    prisma.employee.count({ where: notPunchedInWhere(workforce, cardDay) }),
+    prisma.leaveRequest.count({ where: onLeaveWhere(workforce, cardDay) }),
   ]);
+
+  const cardDateParam = toDateParam(cardDay);
+  const isToday = cardDateParam === toDateParam(orgToday());
+  const viewHref = (next: { filter?: AttendanceFilter; status?: AttendanceStatus }) => {
+    const query = new URLSearchParams({ date: isToday ? "today" : cardDateParam });
+    if (next.filter) query.set("filter", next.filter);
+    if (next.status) query.set("status", next.status);
+    return `/dashboard/attendance?${query}`;
+  };
+
+  const viewTitle = filter
+    ? filterLabels[filter]
+    : status
+    ? statusBadge[status].label
+    : day
+    ? "All records"
+    : "Recent records";
+  const hasFilters = Boolean(selectedDate || filter || status);
+  const showDateColumn = !day;
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-xl font-bold text-slate-800">Attendance & Shifts</h2>
-          <p className="text-xs text-slate-500">Monitor employee punch logs, working hours, and shift adherence</p>
+          <h1 className="text-xl font-bold text-slate-900">Attendance & Shifts</h1>
+          <p className="text-xs text-slate-600">Monitor employee punch logs, working hours, and shift adherence</p>
         </div>
         {canImport && (
           <CsvImportModal
@@ -62,107 +192,158 @@ export default async function AttendancePage() {
         )}
       </div>
 
-      {/* Overview Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
-          <div>
-            <p className="text-xs font-medium text-slate-500">Total Workforce</p>
-            <p className="text-2xl font-bold text-slate-900 mt-1">{totalEmployees}</p>
-          </div>
-          <div className="p-3 rounded-xl text-blue-600 bg-blue-50">
-            <UserCheck className="w-5 h-5" />
-          </div>
+      {/* Day summary: each tile applies its filter to the table below. */}
+      <section aria-labelledby="day-summary">
+        <h2 id="day-summary" className="sr-only">
+          Summary for {formatDay(cardDay)}
+        </h2>
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+          <StatCard
+            label="Checked in"
+            value={checkedInCount}
+            icon={CheckCircle2}
+            tone="success"
+            href={viewHref({ filter: "checked-in" })}
+            active={filter === "checked-in"}
+            hint={isToday ? "Today" : formatDay(cardDay)}
+          />
+          <StatCard
+            label="Late arrivals"
+            value={lateCount}
+            icon={AlertCircle}
+            tone="warning"
+            href={viewHref({ status: "LATE" })}
+            active={!filter && status === "LATE"}
+            hint="After shift start + grace"
+          />
+          <StatCard
+            label="Not punched in"
+            value={notPunchedCount}
+            icon={UserX}
+            tone="brand"
+            href={viewHref({ filter: "not-punched-in" })}
+            active={filter === "not-punched-in"}
+            badge={notPunchedCount > 0 ? { label: "Follow up", tone: "warning" } : { label: "Everyone in", tone: "success" }}
+          />
+          <StatCard
+            label="On approved leave"
+            value={onLeaveCount}
+            icon={Palmtree}
+            tone="accent"
+            href={viewHref({ filter: "on-leave" })}
+            active={filter === "on-leave"}
+          />
         </div>
-
-        <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
-          <div>
-            <p className="text-xs font-medium text-slate-500">Present Today</p>
-            <p className="text-2xl font-bold text-emerald-600 mt-1">{presentToday}</p>
-          </div>
-          <div className="p-3 rounded-xl text-emerald-600 bg-emerald-50">
-            <CheckCircle2 className="w-5 h-5" />
-          </div>
-        </div>
-
-        <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
-          <div>
-            <p className="text-xs font-medium text-slate-500">Late Arrivals</p>
-            <p className="text-2xl font-bold text-amber-600 mt-1">{lateToday}</p>
-          </div>
-          <div className="p-3 rounded-xl text-amber-600 bg-amber-50">
-            <AlertCircle className="w-5 h-5" />
-          </div>
-        </div>
-      </div>
+      </section>
 
       {/* Attendance Logs Table */}
-      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-        <div className="p-4 border-b border-slate-100 flex items-center justify-between">
-          <h3 className="text-sm font-bold text-slate-800">Attendance Logs</h3>
-          <span className="text-xs text-slate-400 flex items-center gap-1">
-            <Calendar className="w-3.5 h-3.5" /> Recent Records
-          </span>
+      <section aria-labelledby="attendance-logs" className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <div className="p-4 border-b border-slate-100 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 id="attendance-logs" className="text-sm font-bold text-slate-900">
+              {viewTitle}
+              <span className="ml-2 text-xs font-medium text-slate-600 tabular-nums">
+                {rows.length}
+                {!day && rows.length === RECENT_LIMIT ? "+" : ""}
+              </span>
+            </h2>
+            <p className="text-xs text-slate-600 flex items-center gap-1 mt-0.5">
+              <Calendar className="w-3.5 h-3.5" aria-hidden />
+              {day ? formatDay(day) : `Latest ${RECENT_LIMIT} punches across all days`}
+            </p>
+          </div>
+
+          {/* Plain GET form: filters live in the URL, so every view is linkable and works without JS. */}
+          <form method="get" action="/dashboard/attendance" className="flex flex-wrap items-end gap-2">
+            {filter && <input type="hidden" name="filter" value={filter} />}
+            <label className="flex flex-col gap-1 text-[11px] font-medium text-slate-600">
+              Date
+              <input
+                type="date"
+                name="date"
+                defaultValue={day ? toDateParam(day) : toDateParam(orgToday())}
+                max={toDateParam(orgToday())}
+                className="h-8 rounded-lg border border-slate-300 bg-white px-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-600"
+              />
+            </label>
+            {filter !== "not-punched-in" && filter !== "on-leave" && (
+              <label className="flex flex-col gap-1 text-[11px] font-medium text-slate-600">
+                Status
+                <select
+                  name="status"
+                  defaultValue={status ?? ""}
+                  className="h-8 rounded-lg border border-slate-300 bg-white px-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-600"
+                >
+                  <option value="">Any status</option>
+                  {Object.values(AttendanceStatus).map((s) => (
+                    <option key={s} value={s}>
+                      {statusBadge[s].label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+            <button
+              type="submit"
+              className="h-8 px-3 rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-xs font-semibold transition-colors duration-200"
+            >
+              Apply
+            </button>
+            {hasFilters && (
+              <Link
+                href="/dashboard/attendance"
+                className="h-8 inline-flex items-center gap-1 px-2.5 rounded-lg text-xs font-medium text-slate-600 hover:bg-slate-100 transition-colors duration-200"
+              >
+                <X className="w-3.5 h-3.5" aria-hidden /> Clear
+              </Link>
+            )}
+          </form>
         </div>
 
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
-            <thead className="bg-slate-50 text-slate-500 border-b border-slate-200">
+            <thead className="bg-surface-muted text-slate-600 border-b border-slate-200">
               <tr>
-                <th className="py-3 px-4">Employee</th>
-                <th className="py-3 px-4">Date</th>
-                <th className="py-3 px-4">Check In</th>
-                <th className="py-3 px-4">Check Out</th>
-                <th className="py-3 px-4">Status</th>
-                <th className="py-3 px-4">Source</th>
+                <th className="py-3 px-4 font-semibold">Employee</th>
+                {showDateColumn && <th className="py-3 px-4 font-semibold">Date</th>}
+                <th className="py-3 px-4 font-semibold">Check In</th>
+                <th className="py-3 px-4 font-semibold">Check Out</th>
+                <th className="py-3 px-4 font-semibold">Status</th>
+                <th className="py-3 px-4 font-semibold">{filter === "on-leave" ? "Leave type" : "Source"}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {attendances.length === 0 ? (
+              {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="py-8 text-center text-slate-400">
-                    No attendance logs recorded yet. Punch in from the dashboard to create logs.
+                  <td colSpan={showDateColumn ? 6 : 5} className="py-8 text-center text-slate-600">
+                    {filter === "not-punched-in"
+                      ? "Everyone in scope has punched in or is on approved leave."
+                      : hasFilters
+                      ? "No records match these filters."
+                      : "No attendance logs recorded yet. Punch in from the dashboard to create logs."}
                   </td>
                 </tr>
               ) : (
-                attendances.map((record) => (
-                  <tr key={record.id} className="hover:bg-slate-50/60">
+                rows.map((row) => (
+                  <tr key={row.key} className="hover:bg-slate-50 transition-colors duration-150">
                     <td className="py-3 px-4">
-                      <div>
-                        <p className="font-semibold text-slate-900">
-                          {record.employee.firstName} {record.employee.lastName}
-                        </p>
-                        <p className="text-[11px] text-slate-400 font-mono">{record.employee.employeeCode}</p>
-                      </div>
+                      <p className="font-semibold text-slate-900">{row.name}</p>
+                      <p className="text-[11px] text-slate-600 font-mono">{row.code}</p>
                     </td>
-                    <td className="py-3 px-4 text-slate-600">
-                      {/* DATE columns come back as UTC midnight, so format in UTC to avoid shifting the day. */}
-                      {new Date(record.date).toLocaleDateString(undefined, { timeZone: "UTC" })}
-                    </td>
-                    <td className="py-3 px-4 text-slate-700 font-medium">
-                      {record.checkIn
-                        ? new Date(record.checkIn).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", timeZone: ORG_TIME_ZONE })
-                        : "--:--"}
-                    </td>
-                    <td className="py-3 px-4 text-slate-700 font-medium">
-                      {record.checkOut
-                        ? new Date(record.checkOut).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", timeZone: ORG_TIME_ZONE })
-                        : "--:--"}
-                    </td>
+                    {showDateColumn && <td className="py-3 px-4 text-slate-600">{formatDay(row.date)}</td>}
+                    <td className="py-3 px-4 text-slate-700 font-medium tabular-nums">{formatTime(row.checkIn)}</td>
+                    <td className="py-3 px-4 text-slate-700 font-medium tabular-nums">{formatTime(row.checkOut)}</td>
                     <td className="py-3 px-4">
-                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${
-                        record.status === "PRESENT" 
-                          ? "bg-emerald-50 text-emerald-600" 
-                          : record.status === "LATE" 
-                          ? "bg-amber-50 text-amber-600" 
-                          : "bg-rose-50 text-rose-600"
-                      }`}>
-                        {record.status}
+                      <span className={clsx("px-2 py-0.5 rounded-full text-[11px] font-semibold", statusBadge[row.status].className)}>
+                        {statusBadge[row.status].label}
                       </span>
                     </td>
                     <td className="py-3 px-4">
-                      <span className="text-[10px] font-mono bg-slate-100 text-slate-600 px-2 py-0.5 rounded">
-                        {record.source}
-                      </span>
+                      {row.source ? (
+                        <span className="text-[11px] font-mono bg-slate-100 text-slate-700 px-2 py-0.5 rounded">{row.source}</span>
+                      ) : (
+                        <span className="text-slate-600">—</span>
+                      )}
                     </td>
                   </tr>
                 ))
@@ -170,7 +351,7 @@ export default async function AttendancePage() {
             </tbody>
           </table>
         </div>
-      </div>
+      </section>
     </div>
   );
 }

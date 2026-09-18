@@ -40,9 +40,9 @@ export default async function ReportsPage() {
           <div>
             <p className="text-xs font-medium text-slate-500">Total Workforce</p>
             <p className="text-2xl font-bold text-slate-900 mt-1">{totalEmployees}</p>
-            <span className="text-[10px] text-emerald-600 font-medium">Active Headcount</span>
+            <span className="text-[11px] text-emerald-700 font-medium">Active Headcount</span>
           </div>
-          <div className="p-3 rounded-xl text-blue-600 bg-blue-50">
+          <div className="p-3 rounded-xl text-brand-700 bg-brand-50">
             <Users className="w-5 h-5" />
           </div>
         </div>
@@ -50,10 +50,10 @@ export default async function ReportsPage() {
         <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
           <div>
             <p className="text-xs font-medium text-slate-500">Leave Approval Rate</p>
-            <p className="text-2xl font-bold text-emerald-600 mt-1">{leaveApprovalRate}%</p>
-            <span className="text-[10px] text-slate-400">{approvedLeaves} of {totalLeaves} Approved</span>
+            <p className="text-2xl font-bold text-emerald-700 mt-1">{leaveApprovalRate}%</p>
+            <span className="text-[11px] text-slate-500">{approvedLeaves} of {totalLeaves} Approved</span>
           </div>
-          <div className="p-3 rounded-xl text-emerald-600 bg-emerald-50">
+          <div className="p-3 rounded-xl text-emerald-700 bg-emerald-50">
             <CalendarCheck className="w-5 h-5" />
           </div>
         </div>
@@ -61,10 +61,10 @@ export default async function ReportsPage() {
         <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
           <div>
             <p className="text-xs font-medium text-slate-500">Total Punches Logged</p>
-            <p className="text-2xl font-bold text-indigo-600 mt-1">{totalAttendanceRecords}</p>
-            <span className="text-[10px] text-indigo-500 font-medium">All Time</span>
+            <p className="text-2xl font-bold text-brand-600 mt-1">{totalAttendanceRecords}</p>
+            <span className="text-[11px] text-brand-600 font-medium">All Time</span>
           </div>
-          <div className="p-3 rounded-xl text-indigo-600 bg-indigo-50">
+          <div className="p-3 rounded-xl text-brand-600 bg-brand-50">
             <TrendingUp className="w-5 h-5" />
           </div>
         </div>
@@ -73,9 +73,9 @@ export default async function ReportsPage() {
           <div>
             <p className="text-xs font-medium text-slate-500">Cumulative Payroll</p>
             <p className="text-2xl font-bold text-slate-900 mt-1">${totalPayrollSpend.toLocaleString()}</p>
-            <span className="text-[10px] text-slate-400">{payrollRecords.length} Slips Disbursed</span>
+            <span className="text-[11px] text-slate-500">{payrollRecords.length} Slips Disbursed</span>
           </div>
-          <div className="p-3 rounded-xl text-emerald-600 bg-emerald-50">
+          <div className="p-3 rounded-xl text-emerald-700 bg-emerald-50">
             <DollarSign className="w-5 h-5" />
           </div>
         </div>
@@ -86,7 +86,7 @@ export default async function ReportsPage() {
         {/* Department Distribution */}
         <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
           <h3 className="text-sm font-bold text-slate-800 mb-4 flex items-center gap-2">
-            <Building className="w-4 h-4 text-indigo-600" /> Headcount by Department
+            <Building className="w-4 h-4 text-brand-600" /> Headcount by Department
           </h3>
           <div className="space-y-4">
             {departments.map((dept) => {
@@ -100,7 +100,7 @@ export default async function ReportsPage() {
                   </div>
                   <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
                     <div
-                      className="bg-indigo-600 h-full rounded-full transition-all duration-500"
+                      className="bg-brand-600 h-full rounded-full transition-all duration-500"
                       style={{ width: `${percentage}%` }}
                     />
                   </div>
@@ -114,7 +114,7 @@ export default async function ReportsPage() {
         <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between">
           <div>
             <h3 className="text-sm font-bold text-slate-800 mb-3 flex items-center gap-2">
-              <BarChart3 className="w-4 h-4 text-emerald-600" /> Operational Health Index
+              <BarChart3 className="w-4 h-4 text-emerald-700" /> Operational Health Index
             </h3>
             <p className="text-xs text-slate-500 leading-relaxed">
               System health and compliance are monitored continuously. All employee clock-in events are tied to verified browser sessions with timestamp validation.
@@ -123,19 +123,19 @@ export default async function ReportsPage() {
 
           <div className="grid grid-cols-2 gap-3 mt-4 pt-4 border-t border-slate-100 text-xs">
             <div className="p-3 bg-slate-50 rounded-lg">
-              <p className="text-slate-400">Database Engine</p>
+              <p className="text-slate-500">Database Engine</p>
               <p className="font-semibold text-slate-800 mt-0.5">PostgreSQL 18</p>
             </div>
             <div className="p-3 bg-slate-50 rounded-lg">
-              <p className="text-slate-400">Database Host</p>
+              <p className="text-slate-500">Database Host</p>
               <p className="font-semibold text-slate-800 mt-0.5">Neon (Singapore)</p>
             </div>
             <div className="p-3 bg-slate-50 rounded-lg">
-              <p className="text-slate-400">Data Synchronization</p>
-              <p className="font-semibold text-emerald-600 mt-0.5">Real-time (Prisma)</p>
+              <p className="text-slate-500">Data Synchronization</p>
+              <p className="font-semibold text-emerald-700 mt-0.5">Real-time (Prisma)</p>
             </div>
             <div className="p-3 bg-slate-50 rounded-lg">
-              <p className="text-slate-400">Architecture</p>
+              <p className="text-slate-500">Architecture</p>
               <p className="font-semibold text-slate-800 mt-0.5">Modular SaaS</p>
             </div>
           </div>

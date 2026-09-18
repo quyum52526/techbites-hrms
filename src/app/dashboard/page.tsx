@@ -1,125 +1,215 @@
 import { prisma } from "@/lib/prisma";
-import { Users, Clock, CalendarCheck2, Building2, UserPlus } from "lucide-react";
+import { Users, Clock, CalendarCheck2, Building2, UserPlus, Fingerprint, UserX } from "lucide-react";
+import type { EmployeeStatus } from "@prisma/client";
 import QuickPunch from "@/components/dashboard/QuickPunch";
+import StatCard from "@/components/dashboard/StatCard";
 import Link from "next/link";
-import { getActiveCompanyId, employeeScope, departmentScope } from "@/lib/company";
-import { orgToday } from "@/lib/attendance-time";
+import { canAccess, getActiveUser } from "@/lib/auth";
+import { getActiveCompanyId, employeeScope, departmentScope, workforceScope } from "@/lib/company";
+import { DEFAULT_SHIFT_POLICY, ORG_UTC_OFFSET_MINUTES, orgToday } from "@/lib/attendance-time";
+import { checkedInWhere, notPunchedInWhere, onLeaveWhere } from "@/lib/attendance-views";
+
+const statusBadge: Record<EmployeeStatus, { label: string; className: string }> = {
+  ACTIVE: { label: "Active", className: "bg-emerald-50 text-emerald-700" },
+  PROBATION: { label: "Probation", className: "bg-brand-50 text-brand-700" },
+  NOTICE_PERIOD: { label: "Notice period", className: "bg-amber-50 text-amber-700" },
+  RESIGNED: { label: "Resigned", className: "bg-slate-100 text-slate-700" },
+  TERMINATED: { label: "Terminated", className: "bg-rose-50 text-rose-700" },
+};
 
 export default async function DashboardPage() {
   const today = orgToday();
+  const monthStart = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), 1) - ORG_UTC_OFFSET_MINUTES * 60_000);
 
-  const activeCompanyId = await getActiveCompanyId();
-  const employeeWhere = employeeScope(activeCompanyId);
+  const [user, activeCompanyId] = await Promise.all([getActiveUser(), getActiveCompanyId()]);
+  const isHr = canAccess(user.role, "hr");
 
-  const [totalEmployees, totalDepartments, pendingLeaves, recentEmployees, adminEmployee, presentToday] =
-    await Promise.all([
-      prisma.employee.count({ where: employeeWhere }),
-      prisma.department.count({ where: departmentScope(activeCompanyId) }),
-      prisma.leaveRequest.count({ where: { status: "PENDING", employee: employeeWhere } }),
-      prisma.employee.findMany({
-        where: employeeWhere,
-        take: 5,
-        include: { department: true, designation: true },
-        orderBy: { createdAt: "desc" },
-      }),
-      prisma.employee.findFirst(),
-      prisma.attendanceRecord.count({
-        where: { date: today, checkIn: { not: null }, employee: employeeWhere },
-      }),
-    ]);
-
-  // QuickPunch is personal, so it reads the punching employee's own record rather than the company-wide count.
-  const todayAttendance = adminEmployee
-    ? await prisma.attendanceRecord.findUnique({
-        where: { employeeId_date: { employeeId: adminEmployee.id, date: today } },
-      })
+  // Roles without the company switcher always see their own company's figures, not the whole group's.
+  const ownEmployee = user.employeeId
+    ? await prisma.employee.findUnique({ where: { id: user.employeeId }, select: { companyId: true } })
     : null;
+  const companyId = isHr ? activeCompanyId : ownEmployee?.companyId ?? null;
+  const employeeWhere = employeeScope(companyId);
+  const workforceWhere = workforceScope(companyId);
 
-  const cards = [
-    { label: "Total Employees", value: totalEmployees, icon: Users, color: "text-blue-600 bg-blue-50" },
-    { label: "Departments", value: totalDepartments, icon: Building2, color: "text-emerald-600 bg-emerald-50" },
-    { label: "Pending Leaves", value: pendingLeaves, icon: CalendarCheck2, color: "text-amber-600 bg-amber-50" },
-    { label: "Today's Attendance", value: `${presentToday} / ${totalEmployees}`, icon: Clock, color: "text-indigo-600 bg-indigo-50" },
-  ];
+  const [
+    headcount,
+    joinedThisMonth,
+    totalDepartments,
+    pendingLeaves,
+    recentEmployees,
+    presentToday,
+    onLeaveToday,
+    notPunchedToday,
+    shift,
+    myAttendance,
+  ] = await Promise.all([
+    prisma.employee.count({ where: workforceWhere }),
+    prisma.employee.count({ where: { ...workforceWhere, joiningDate: { gte: monthStart } } }),
+    prisma.department.count({ where: departmentScope(companyId) }),
+    prisma.leaveRequest.count({ where: { status: "PENDING", employee: employeeWhere } }),
+    prisma.employee.findMany({
+      where: employeeWhere,
+      take: 5,
+      include: { department: true, designation: true },
+      orderBy: { createdAt: "desc" },
+    }),
+    // Same definitions as the Attendance page filters, so each tile's number matches the list it opens.
+    prisma.attendanceRecord.count({ where: checkedInWhere(workforceWhere, today) }),
+    prisma.leaveRequest.count({ where: onLeaveWhere(workforceWhere, today) }),
+    prisma.employee.count({ where: notPunchedInWhere(workforceWhere, today) }),
+    prisma.shift.findFirst({ orderBy: { createdAt: "asc" }, select: { name: true, startTime: true, endTime: true } }),
+    // QuickPunch is personal: it reads the signed-in user's own record, never another employee's.
+    user.employeeId
+      ? prisma.attendanceRecord.findUnique({
+          where: { employeeId_date: { employeeId: user.employeeId, date: today } },
+          select: { checkIn: true, checkOut: true },
+        })
+      : null,
+  ]);
+
+  const attendanceRate = headcount > 0 ? Math.round((presentToday / headcount) * 100) : 0;
+  const avgTeamSize = totalDepartments > 0 ? Math.round(headcount / totalDepartments) : 0;
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-xl font-bold text-slate-800">HR Operations Overview</h2>
-          <p className="text-xs text-slate-500">Real-time workforce snapshot and quick actions</p>
+          <h1 className="text-xl font-bold text-slate-900">HR Operations Overview</h1>
+          <p className="text-xs text-slate-600">Real-time workforce snapshot and quick actions</p>
         </div>
-        <Link
-          href="/dashboard/employees"
-          className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold px-4 py-2 rounded-lg shadow-sm"
-        >
-          <UserPlus className="w-4 h-4" /> Add Employee
-        </Link>
+        {isHr && (
+          <Link
+            href="/dashboard/employees"
+            className="flex items-center gap-2 bg-brand-gradient text-white text-xs font-semibold px-4 py-2.5 rounded-lg shadow-sm transition-shadow duration-200 hover:shadow-md"
+          >
+            <UserPlus className="w-4 h-4" aria-hidden /> Add Employee
+          </Link>
+        )}
       </div>
 
-      {/* Metrics Row */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {cards.map((card, idx) => {
-          const Icon = card.icon;
-          return (
-            <div key={idx} className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
-              <div>
-                <p className="text-xs font-medium text-slate-500">{card.label}</p>
-                <p className="text-2xl font-bold text-slate-900 mt-1">{card.value}</p>
-              </div>
-              <div className={`p-3 rounded-xl ${card.color}`}>
-                <Icon className="w-5 h-5" />
-              </div>
-            </div>
-          );
-        })}
+      {/* Metrics Row: every tile drills into the list behind its number. */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4">
+        <StatCard
+          label="Headcount"
+          className="sm:col-span-2 xl:col-span-1"
+          value={headcount}
+          icon={Users}
+          tone="brand"
+          href={isHr ? "/dashboard/employees" : undefined}
+          badge={{ label: `+${joinedThisMonth} this month`, tone: joinedThisMonth > 0 ? "success" : "neutral" }}
+          hint="Active, probation & notice"
+        />
+        <StatCard
+          label="Departments"
+          value={totalDepartments}
+          icon={Building2}
+          tone="accent"
+          href={isHr ? "/dashboard/departments" : undefined}
+          badge={{ label: `~${avgTeamSize} per team`, tone: "neutral" }}
+        />
+        <StatCard
+          label="Pending Leaves"
+          value={pendingLeaves}
+          icon={CalendarCheck2}
+          tone="warning"
+          href="/dashboard/leaves?status=PENDING"
+          badge={pendingLeaves > 0 ? { label: "Needs review", tone: "warning" } : { label: "All clear", tone: "success" }}
+        />
+        <StatCard
+          label="Today's Attendance"
+          value={
+            <>
+              {presentToday}
+              <span className="text-base font-semibold text-slate-500"> / {headcount}</span>
+            </>
+          }
+          icon={Clock}
+          tone="success"
+          href="/dashboard/attendance?date=today&filter=checked-in"
+          badge={{ label: `${attendanceRate}% present`, tone: attendanceRate >= 80 ? "success" : "warning" }}
+        />
+        <StatCard
+          label="Not Punched In"
+          value={notPunchedToday}
+          icon={UserX}
+          tone="brand"
+          href="/dashboard/attendance?date=today&filter=not-punched-in"
+          badge={notPunchedToday > 0 ? { label: "Follow up", tone: "warning" } : { label: "Everyone in", tone: "success" }}
+          hint={`${onLeaveToday} on approved leave`}
+        />
       </div>
 
-      {/* Interactive Hub: Quick Punch & Directory Preview */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {adminEmployee && (
+      {/* Interactive Hub: items-start keeps the punch card compact instead of stretching to the table's height. */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+        {user.employeeId ? (
           <QuickPunch
-            employeeId={adminEmployee.id}
-            hasCheckedIn={Boolean(todayAttendance?.checkIn)}
-            hasCheckedOut={Boolean(todayAttendance?.checkOut)}
-            checkInTime={todayAttendance?.checkIn?.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+            checkIn={myAttendance?.checkIn?.toISOString() ?? null}
+            checkOut={myAttendance?.checkOut?.toISOString() ?? null}
+            shiftName={shift?.name ?? "General Shift"}
+            shiftStart={shift?.startTime ?? DEFAULT_SHIFT_POLICY.startTime}
+            shiftEnd={shift?.endTime ?? "18:00"}
           />
+        ) : (
+          <section className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex items-start gap-3">
+            <div className="p-2.5 rounded-lg bg-slate-100 text-slate-600">
+              <Fingerprint className="w-5 h-5" aria-hidden />
+            </div>
+            <div>
+              <h2 className="text-sm font-bold text-slate-900">Web punch unavailable</h2>
+              <p className="text-xs text-slate-600 mt-1">
+                Your login is not linked to an employee record, so there is no attendance to mark.
+              </p>
+            </div>
+          </section>
         )}
 
-        <div className="lg:col-span-2 bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+        <section className="lg:col-span-2 bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-bold text-slate-800">Recent Employees</h3>
-            <Link href="/dashboard/employees" className="text-xs text-indigo-600 hover:underline">View All</Link>
+            <h2 className="text-sm font-bold text-slate-900">Recent Employees</h2>
+            {isHr && (
+              <Link href="/dashboard/employees" className="text-xs font-medium text-brand-700 hover:underline">
+                View all
+              </Link>
+            )}
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
-              <thead className="bg-slate-50 text-slate-500 border-y border-slate-100">
+              <thead className="bg-surface-muted text-slate-600 border-y border-slate-100">
                 <tr>
-                  <th className="py-2.5 px-3">Employee</th>
-                  <th className="py-2.5 px-3">Code</th>
-                  <th className="py-2.5 px-3">Department</th>
-                  <th className="py-2.5 px-3">Status</th>
+                  <th className="py-2.5 px-3 font-semibold">Employee</th>
+                  <th className="py-2.5 px-3 font-semibold">Code</th>
+                  <th className="py-2.5 px-3 font-semibold">Department</th>
+                  <th className="py-2.5 px-3 font-semibold">Status</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {recentEmployees.map((emp) => (
-                  <tr key={emp.id} className="hover:bg-slate-50/60">
-                    <td className="py-2.5 px-3 font-medium text-slate-900">
-                      {emp.firstName} {emp.lastName}
-                    </td>
-                    <td className="py-2.5 px-3 text-slate-500">{emp.employeeCode}</td>
-                    <td className="py-2.5 px-3 text-slate-600">{emp.department?.name ?? "N/A"}</td>
-                    <td className="py-2.5 px-3">
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-600">
-                        {emp.status}
-                      </span>
+                {recentEmployees.length === 0 ? (
+                  <tr>
+                    <td colSpan={4} className="py-8 text-center text-slate-600">
+                      No employees in this company yet.
                     </td>
                   </tr>
-                ))}
+                ) : (
+                  recentEmployees.map((emp) => (
+                    <tr key={emp.id} className="hover:bg-slate-50 transition-colors duration-150">
+                      <td className="py-2.5 px-3 font-medium text-slate-900">
+                        {emp.firstName} {emp.lastName}
+                      </td>
+                      <td className="py-2.5 px-3 text-slate-600 font-mono">{emp.employeeCode}</td>
+                      <td className="py-2.5 px-3 text-slate-600">{emp.department?.name ?? "N/A"}</td>
+                      <td className="py-2.5 px-3">
+                        <span className={`px-2 py-0.5 rounded-full text-[11px] font-semibold ${statusBadge[emp.status].className}`}>
+                          {statusBadge[emp.status].label}
+                        </span>
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>
-        </div>
+        </section>
       </div>
     </div>
   );

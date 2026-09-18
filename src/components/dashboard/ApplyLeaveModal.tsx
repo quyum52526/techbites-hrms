@@ -20,8 +20,8 @@ export default function ApplyLeaveModal({ employees, leaveTypes }: Props) {
     try {
       await submitLeaveRequest(formData);
       setIsOpen(false);
-    } catch (err: any) {
-      alert(err.message || "Failed to submit leave request");
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Failed to submit leave request");
     } finally {
       setLoading(false);
     }
@@ -31,7 +31,7 @@ export default function ApplyLeaveModal({ employees, leaveTypes }: Props) {
     <>
       <button
         onClick={() => setIsOpen(true)}
-        className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold px-4 py-2 rounded-lg shadow-sm"
+        className="flex items-center gap-2 bg-brand-600 hover:bg-brand-700 text-white text-xs font-semibold px-4 py-2 rounded-lg shadow-sm"
       >
         <CalendarPlus className="w-4 h-4" /> Apply for Leave
       </button>
@@ -41,7 +41,7 @@ export default function ApplyLeaveModal({ employees, leaveTypes }: Props) {
           <div className="bg-white rounded-xl shadow-xl w-full max-w-md border border-slate-200 overflow-hidden">
             <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
               <h3 className="font-semibold text-slate-800 text-sm">Submit Leave Request</h3>
-              <button onClick={() => setIsOpen(false)} className="text-slate-400 hover:text-slate-600">
+              <button onClick={() => setIsOpen(false)} className="text-slate-500 hover:text-slate-600">
                 <X className="w-4 h-4" />
               </button>
             </div>
@@ -49,7 +49,7 @@ export default function ApplyLeaveModal({ employees, leaveTypes }: Props) {
             <form onSubmit={handleSubmit} className="p-6 space-y-4 text-xs">
               <div>
                 <label className="block text-slate-600 font-medium mb-1">Select Employee *</label>
-                <select name="employeeId" required className="w-full border border-slate-200 rounded-lg p-2 focus:ring-1 focus:ring-indigo-500 outline-none bg-white">
+                <select name="employeeId" required className="w-full border border-slate-200 rounded-lg p-2 focus:ring-2 focus:ring-brand-600 outline-none bg-white">
                   {employees.map((emp) => (
                     <option key={emp.id} value={emp.id}>
                       {emp.firstName} {emp.lastName}
@@ -60,7 +60,7 @@ export default function ApplyLeaveModal({ employees, leaveTypes }: Props) {
 
               <div>
                 <label className="block text-slate-600 font-medium mb-1">Leave Type *</label>
-                <select name="leaveTypeId" required className="w-full border border-slate-200 rounded-lg p-2 focus:ring-1 focus:ring-indigo-500 outline-none bg-white">
+                <select name="leaveTypeId" required className="w-full border border-slate-200 rounded-lg p-2 focus:ring-2 focus:ring-brand-600 outline-none bg-white">
                   {leaveTypes.map((type) => (
                     <option key={type.id} value={type.id}>
                       {type.name} ({type.daysAllowed} days/yr)
@@ -72,11 +72,11 @@ export default function ApplyLeaveModal({ employees, leaveTypes }: Props) {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-slate-600 font-medium mb-1">Start Date *</label>
-                  <input type="date" name="startDate" required className="w-full border border-slate-200 rounded-lg p-2 focus:ring-1 focus:ring-indigo-500 outline-none" />
+                  <input type="date" name="startDate" required className="w-full border border-slate-200 rounded-lg p-2 focus:ring-2 focus:ring-brand-600 outline-none" />
                 </div>
                 <div>
                   <label className="block text-slate-600 font-medium mb-1">End Date *</label>
-                  <input type="date" name="endDate" required className="w-full border border-slate-200 rounded-lg p-2 focus:ring-1 focus:ring-indigo-500 outline-none" />
+                  <input type="date" name="endDate" required className="w-full border border-slate-200 rounded-lg p-2 focus:ring-2 focus:ring-brand-600 outline-none" />
                 </div>
               </div>
 
@@ -87,7 +87,7 @@ export default function ApplyLeaveModal({ employees, leaveTypes }: Props) {
                   required
                   rows={3}
                   placeholder="State the reason..."
-                  className="w-full border border-slate-200 rounded-lg p-2 focus:ring-1 focus:ring-indigo-500 outline-none"
+                  className="w-full border border-slate-200 rounded-lg p-2 focus:ring-2 focus:ring-brand-600 outline-none"
                 />
               </div>
 
@@ -102,7 +102,7 @@ export default function ApplyLeaveModal({ employees, leaveTypes }: Props) {
                 <button
                   type="submit"
                   disabled={loading}
-                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-semibold"
+                  className="px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white rounded-lg font-semibold"
                 >
                   {loading ? "Submitting..." : "Submit Application"}
                 </button>

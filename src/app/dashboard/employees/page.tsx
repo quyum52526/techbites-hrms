@@ -2,15 +2,18 @@ import { prisma } from "@/lib/prisma";
 import AddEmployeeModal from "@/components/dashboard/AddEmployeeModal";
 import CsvImportModal from "@/components/dashboard/CsvImportModal";
 import { importEmployeesCsv } from "@/app/actions/employees";
-import { Mail, Phone, ShieldCheck } from "lucide-react";
+import { Mail, Phone } from "lucide-react";
+import Link from "next/link";
 import { getActiveCompanyId, employeeScope } from "@/lib/company";
+import { employeeSearchWhere } from "@/lib/employee-search";
 
-export default async function EmployeesPage() {
+export default async function EmployeesPage({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
+  const query = (await searchParams).q?.trim() ?? "";
   const activeCompanyId = await getActiveCompanyId();
 
   const [employees, companies, departments, designations] = await Promise.all([
     prisma.employee.findMany({
-      where: employeeScope(activeCompanyId),
+      where: { ...employeeScope(activeCompanyId), ...(query ? employeeSearchWhere(query) : {}) },
       include: {
         company: { select: { code: true, name: true } },
         department: true,
@@ -31,8 +34,19 @@ export default async function EmployeesPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-xl font-bold text-slate-800">Employee Directory</h2>
-          <p className="text-xs text-slate-500">Manage workforce records, departments, and designations</p>
+          <h1 className="text-xl font-bold text-slate-900">Employee Directory</h1>
+          <p className="text-xs text-slate-600">
+            {query ? (
+              <>
+                {employees.length} result{employees.length === 1 ? "" : "s"} for &ldquo;{query}&rdquo; ·{" "}
+                <Link href="/dashboard/employees" className="font-medium text-brand-700 hover:underline">
+                  Clear search
+                </Link>
+              </>
+            ) : (
+              "Manage workforce records, departments, and designations"
+            )}
+          </p>
         </div>
         <div className="flex items-center gap-2">
           <CsvImportModal
@@ -81,40 +95,40 @@ export default async function EmployeesPage() {
                 <tr key={emp.id} className="hover:bg-slate-50/60">
                   <td className="py-3 px-4">
                     <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-full bg-indigo-50 text-indigo-600 font-bold flex items-center justify-center text-xs">
+                      <div className="w-8 h-8 rounded-full bg-brand-50 text-brand-600 font-bold flex items-center justify-center text-xs">
                         {emp.firstName[0]}{emp.lastName[0]}
                       </div>
                       <div>
                         <p className="font-semibold text-slate-900">{emp.firstName} {emp.lastName}</p>
-                        <p className="text-[11px] text-slate-400">{emp.user?.email}</p>
+                        <p className="text-[11px] text-slate-500">{emp.user?.email}</p>
                       </div>
                     </div>
                   </td>
                   <td className="py-3 px-4">
                     <p className="font-mono font-medium text-slate-600">{emp.employeeCode}</p>
                     {emp.company && (
-                      <span title={emp.company.name} className="inline-block mt-1 font-mono text-[10px] px-1.5 py-0.5 rounded bg-sky-50 text-sky-700">
+                      <span title={emp.company.name} className="inline-block mt-1 font-mono text-[11px] px-1.5 py-0.5 rounded bg-brand-50 text-brand-700">
                         {emp.company.code}
                       </span>
                     )}
                   </td>
                   <td className="py-3 px-4">
                     <p className="font-medium text-slate-800">{emp.designation?.title ?? "No Designation"}</p>
-                    <p className="text-[11px] text-slate-400">{emp.department?.name ?? "General"}</p>
+                    <p className="text-[11px] text-slate-500">{emp.department?.name ?? "General"}</p>
                   </td>
                   <td className="py-3 px-4 text-slate-500">
                     <div className="flex flex-col gap-0.5">
-                      <span className="flex items-center gap-1.5"><Mail className="w-3 h-3 text-slate-400" /> {emp.user?.email}</span>
-                      {emp.phone && <span className="flex items-center gap-1.5"><Phone className="w-3 h-3 text-slate-400" /> {emp.phone}</span>}
+                      <span className="flex items-center gap-1.5"><Mail className="w-3 h-3 text-slate-500" /> {emp.user?.email}</span>
+                      {emp.phone && <span className="flex items-center gap-1.5"><Phone className="w-3 h-3 text-slate-500" /> {emp.phone}</span>}
                     </div>
                   </td>
                   <td className="py-3 px-4">
-                    <span className="text-[10px] font-medium bg-slate-100 text-slate-700 px-2 py-0.5 rounded">
+                    <span className="text-[11px] font-medium bg-slate-100 text-slate-700 px-2 py-0.5 rounded">
                       {emp.employmentType}
                     </span>
                   </td>
                   <td className="py-3 px-4">
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-600">
+                    <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700">
                       {emp.status}
                     </span>
                   </td>

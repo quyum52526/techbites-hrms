@@ -1,8 +1,45 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+/*
+ * TechBites HRMS brand tokens, sampled from /public/tech-bites-hrms-logo.png.
+ * The UI is light-only: there is deliberately no prefers-color-scheme: dark block, because a partial
+ * dark override turned inherited text near-white on white surfaces (inputs dropped to ~1.2:1).
+ *
+ * Contrast notes (WCAG 2.x, against #FFFFFF):
+ *   brand-500 #00AEEF = 2.53:1  -> decorative, glows, and text on the navy sidebar only (7.06:1 on #0F172A)
+ *   brand-600 #0078B1 = 4.88:1  -> primary buttons (white text), links, focus rings
+ *   accent-700 #5B21B6 = 8.98:1 -> secondary accent, gradient end
+ */
+@theme {
+  --color-brand-50: oklch(97.7% 0.017 232);
+  --color-brand-100: oklch(95.1% 0.036 232);
+  --color-brand-200: oklch(90.2% 0.07 232);
+  --color-brand-300: oklch(83% 0.115 232);
+  --color-brand-400: oklch(76% 0.145 233);
+  --color-brand-500: oklch(70.8% 0.149 234.4);
+  --color-brand-600: oklch(54.5% 0.125 240);
+  --color-brand-700: oklch(47% 0.11 242);
+  --color-brand-800: oklch(40.5% 0.092 243);
+  --color-brand-900: oklch(35% 0.076 244);
+  --color-brand-950: oklch(26.5% 0.056 246);
+
+  --color-accent-50: var(--color-violet-50);
+  --color-accent-100: var(--color-violet-100);
+  --color-accent-200: var(--color-violet-200);
+  --color-accent-400: var(--color-violet-400);
+  --color-accent-500: var(--color-violet-500);
+  --color-accent-600: var(--color-violet-700);
+  --color-accent-700: #5b21b6;
+  --color-accent-800: #4b1e8a;
+
+  --color-surface: #ffffff;
+  --color-surface-muted: #f8fafc;
+  --color-sidebar: #0f172a;
+  --color-sidebar-deep: #111827;
+
+  --color-success-fg: var(--color-emerald-700);
+  --color-warning-fg: var(--color-amber-700);
+  --color-danger-fg: var(--color-rose-700);
 }
 
 @theme inline {
@@ -12,31 +49,60 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+:root {
+  --background: #ffffff;
+  --foreground: #0f172a;
+  color-scheme: light;
+}
+
+/* Primary action fill: brand cyan into logo violet. White text passes on both stops (4.88 / 8.98). */
+@utility bg-brand-gradient {
+  background-image: linear-gradient(135deg, var(--color-brand-600), var(--color-accent-700));
+}
+
+@layer base {
+  body {
+    background: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
   }
-}
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
-}
-/* ব্রাউজারের নীল সিলেকশন ও অটোফিল সাদা টেক্সট ফিক্স */
-input:-webkit-autofill,
-input:-webkit-autofill:hover, 
-input:-webkit-autofill:focus,
-input:-webkit-autofill:active {
-    -webkit-box-shadow: 0 0 0 30px white inset !important;
-    -webkit-text-fill-color: #000000 !important;
-}
+  input,
+  select,
+  textarea {
+    color: var(--color-slate-900);
+  }
 
-/* টাইপ করার সময় কোনো টেক্সট সিলেক্ট হলে কালো টেক্সট নিশ্চিত করা */
-input::selection {
-    background-color: #cbd5e1;
-    color: #000000;
+  /* Preflight falls back to currentColor at 50% opacity (3.37:1); slate-500 is 4.77:1 on white. */
+  ::placeholder {
+    color: var(--color-slate-500);
+    opacity: 1;
+  }
+
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]) {
+    cursor: pointer;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-brand-600);
+    outline-offset: 2px;
+  }
+
+  input::selection,
+  textarea::selection {
+    background-color: var(--color-brand-100);
+    color: var(--color-slate-900);
+  }
+
+  /* Keep Chrome's autofill tint off the white inputs. */
+  input:-webkit-autofill,
+  input:-webkit-autofill:hover,
+  input:-webkit-autofill:focus,
+  input:-webkit-autofill:active {
+    -webkit-box-shadow: 0 0 0 30px var(--color-surface) inset;
+    -webkit-text-fill-color: var(--color-slate-900);
+  }
 }
 
 /* Pay-slip printing: while a pay-slip is open, print only the pay-slip (it is portaled directly under <body>). */

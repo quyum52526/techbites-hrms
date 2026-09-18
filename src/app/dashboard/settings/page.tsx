@@ -27,7 +27,7 @@ export default async function SettingsPage() {
         {/* Working Hours & Shift Rules */}
         <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-4">
           <div className="flex items-center gap-2 pb-3 border-b border-slate-100 font-semibold text-sm text-slate-800">
-            <Clock className="w-4 h-4 text-indigo-600" />
+            <Clock className="w-4 h-4 text-brand-600" />
             <span>Attendance & Shift Policy</span>
           </div>
 
@@ -53,7 +53,7 @@ export default async function SettingsPage() {
                     name="startTime"
                     defaultValue={defaultShift.startTime}
                     required
-                    className="w-full border border-slate-200 rounded-lg p-2 focus:ring-1 focus:ring-indigo-500 outline-none"
+                    className="w-full border border-slate-200 rounded-lg p-2 focus:ring-2 focus:ring-brand-600 outline-none"
                   />
                 </div>
                 <div>
@@ -63,7 +63,7 @@ export default async function SettingsPage() {
                     name="endTime"
                     defaultValue={defaultShift.endTime}
                     required
-                    className="w-full border border-slate-200 rounded-lg p-2 focus:ring-1 focus:ring-indigo-500 outline-none"
+                    className="w-full border border-slate-200 rounded-lg p-2 focus:ring-2 focus:ring-brand-600 outline-none"
                   />
                 </div>
               </div>
@@ -75,29 +75,29 @@ export default async function SettingsPage() {
                   name="graceMinutes"
                   defaultValue={defaultShift.graceMinutes}
                   required
-                  className="w-full border border-slate-200 rounded-lg p-2 focus:ring-1 focus:ring-indigo-500 outline-none"
+                  className="w-full border border-slate-200 rounded-lg p-2 focus:ring-2 focus:ring-brand-600 outline-none"
                 />
-                <span className="text-[10px] text-slate-400 mt-1 block">
-                  Punches after {defaultShift.graceMinutes} minutes past start time trigger "LATE" status.
+                <span className="text-[11px] text-slate-500 mt-1 block">
+                  Punches after {defaultShift.graceMinutes} minutes past start time trigger &ldquo;LATE&rdquo; status.
                 </span>
               </div>
 
               <button
                 type="submit"
-                className="flex items-center justify-center gap-2 w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-lg shadow-sm transition-colors"
+                className="flex items-center justify-center gap-2 w-full py-2 bg-brand-600 hover:bg-brand-700 text-white font-semibold rounded-lg shadow-sm transition-colors"
               >
                 <Save className="w-3.5 h-3.5" /> Save Shift Policies
               </button>
             </form>
           ) : (
-            <p className="text-xs text-slate-400">No shift record found to configure.</p>
+            <p className="text-xs text-slate-500">No shift record found to configure.</p>
           )}
         </div>
 
         {/* Company Organization Info */}
         <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-4">
           <div className="flex items-center gap-2 pb-3 border-b border-slate-100 font-semibold text-sm text-slate-800">
-            <Building2 className="w-4 h-4 text-emerald-600" />
+            <Building2 className="w-4 h-4 text-emerald-700" />
             <span>Organization Profile</span>
           </div>
 
@@ -149,7 +149,7 @@ export default async function SettingsPage() {
             {leaveTypes.map((type) => (
               <div key={type.id} className="py-2.5 flex justify-between items-center">
                 <span className="font-medium text-slate-700">{type.name}</span>
-                <span className="px-2.5 py-0.5 rounded-full font-bold bg-indigo-50 text-indigo-700">
+                <span className="px-2.5 py-0.5 rounded-full font-bold bg-brand-50 text-brand-700">
                   {type.daysAllowed} Days / Year
                 </span>
               </div>
@@ -160,7 +160,7 @@ export default async function SettingsPage() {
         {/* Security & Access Audit */}
         <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-3">
           <div className="flex items-center gap-2 pb-2 border-b border-slate-100 font-semibold text-sm text-slate-800">
-            <ShieldAlert className="w-4 h-4 text-amber-600" />
+            <ShieldAlert className="w-4 h-4 text-amber-700" />
             <span>Security & Data Isolation</span>
           </div>
           <div className="text-xs text-slate-600 space-y-2">

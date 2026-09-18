@@ -55,13 +55,13 @@ export function PayrollControls({ period, periodLabel, activeCompanyId, scopeLab
               setResult(null);
               startNavigation(() => router.push(`${pathname}?period=${periodParam(next)}`));
             }}
-            className="pl-8 pr-2 py-1.5 text-xs font-medium text-slate-900 bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500"
+            className="pl-8 pr-2 py-1.5 text-xs font-medium text-slate-900 bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-600"
           />
         </label>
         <button
           onClick={handleGenerate}
           disabled={isGenerating || isNavigating}
-          className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white text-xs font-semibold px-4 py-2 rounded-lg shadow-sm"
+          className="flex items-center gap-2 bg-brand-600 hover:bg-brand-700 disabled:opacity-60 text-white text-xs font-semibold px-4 py-2 rounded-lg shadow-sm"
         >
           {isGenerating ? <Loader2 className="w-4 h-4 animate-spin" /> : <PlayCircle className="w-4 h-4" />}
           {isGenerating ? "Generating..." : hasRecords ? "Regenerate Payroll" : "Generate Payroll"}
@@ -113,7 +113,7 @@ export function PayrollStatusSelect({ recordId, status }: { recordId: string; st
           });
         }}
         className={clsx(
-          "px-2 py-1 rounded-md border text-[11px] font-bold cursor-pointer focus:outline-none focus:ring-1 focus:ring-indigo-500 disabled:opacity-60",
+          "px-2 py-1 rounded-md border text-[11px] font-bold cursor-pointer focus:outline-none focus:ring-2 focus:ring-brand-600 disabled:opacity-60",
           statusStyles[status]
         )}
       >
@@ -123,7 +123,7 @@ export function PayrollStatusSelect({ recordId, status }: { recordId: string; st
           </option>
         ))}
       </select>
-      {error && <span className="text-[10px] font-semibold text-black bg-red-100 border border-red-300 rounded px-1.5 py-0.5">{error}</span>}
+      {error && <span className="text-[11px] font-semibold text-black bg-red-100 border border-red-300 rounded px-1.5 py-0.5">{error}</span>}
     </div>
   );
 }

@@ -22,7 +22,7 @@ interface Company {
 type ModalState = { mode: "create" } | { mode: "edit"; company: Company } | null;
 
 const inputClass =
-  "w-full border border-slate-200 rounded-lg p-2 text-slate-900 bg-white font-medium placeholder:text-slate-400 placeholder:font-normal focus:ring-1 focus:ring-indigo-500 outline-none";
+  "w-full border border-slate-200 rounded-lg p-2 text-slate-900 bg-white font-medium placeholder:text-slate-500 placeholder:font-normal focus:ring-2 focus:ring-brand-600 outline-none";
 const labelClass = "block text-slate-600 font-medium mb-1";
 
 export default function CompanyManager({ companies }: { companies: Company[] }) {
@@ -78,19 +78,19 @@ export default function CompanyManager({ companies }: { companies: Company[] }) 
     <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-4">
       <div className="flex items-center justify-between pb-3 border-b border-slate-100">
         <div className="flex items-center gap-2 font-semibold text-sm text-slate-800">
-          <Building className="w-4 h-4 text-sky-600" />
+          <Building className="w-4 h-4 text-brand-600" />
           <span>Sister Concerns & Companies</span>
         </div>
         <button
           onClick={() => openModal({ mode: "create" })}
-          className="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold px-3 py-1.5 rounded-lg shadow-sm"
+          className="flex items-center gap-1.5 bg-brand-600 hover:bg-brand-700 text-white text-xs font-semibold px-3 py-1.5 rounded-lg shadow-sm"
         >
           <Plus className="w-3.5 h-3.5" /> Add Company
         </button>
       </div>
 
       {companies.length === 0 ? (
-        <p className="text-xs text-slate-400 py-4 text-center">No companies configured yet. Add your parent company to get started.</p>
+        <p className="text-xs text-slate-500 py-4 text-center">No companies configured yet. Add your parent company to get started.</p>
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-xs">
@@ -113,7 +113,7 @@ export default function CompanyManager({ companies }: { companies: Company[] }) 
                       <div className="min-w-0">
                         <p className="font-medium text-slate-700">{company.name}</p>
                         {(company.email || company.phone) && (
-                          <p className="text-[11px] text-slate-400 mt-0.5">
+                          <p className="text-[11px] text-slate-500 mt-0.5">
                             {[company.email, company.phone].filter(Boolean).join(" · ")}
                           </p>
                         )}
@@ -123,13 +123,13 @@ export default function CompanyManager({ companies }: { companies: Company[] }) 
                   <td className="py-2.5 pr-3">
                     <span className="font-mono text-[11px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-600">{company.code}</span>
                   </td>
-                  <td className="py-2.5 pr-3 font-mono text-slate-600">{company.binNumber ?? <span className="text-slate-300">—</span>}</td>
+                  <td className="py-2.5 pr-3 font-mono text-slate-600">{company.binNumber ?? <span className="text-slate-500">—</span>}</td>
                   <td className="py-2.5 pr-3 text-right tabular-nums text-slate-700">{company.employeeCount}</td>
                   <td className="py-2.5 pr-3">
                     <span
                       className={clsx(
-                        "px-2.5 py-0.5 rounded-full font-semibold text-[10px]",
-                        company.isParent ? "bg-indigo-50 text-indigo-700" : "bg-emerald-50 text-emerald-700"
+                        "px-2.5 py-0.5 rounded-full font-semibold text-[11px]",
+                        company.isParent ? "bg-brand-50 text-brand-700" : "bg-emerald-50 text-emerald-700"
                       )}
                     >
                       {company.isParent ? "Parent" : "Sister"}
@@ -139,7 +139,7 @@ export default function CompanyManager({ companies }: { companies: Company[] }) 
                     <button
                       onClick={() => openModal({ mode: "edit", company })}
                       title={`Edit ${company.name}`}
-                      className="p-1.5 rounded-md text-slate-400 hover:text-indigo-600 hover:bg-indigo-50"
+                      className="p-1.5 rounded-md text-slate-500 hover:text-brand-600 hover:bg-brand-50"
                     >
                       <Pencil className="w-3.5 h-3.5" />
                     </button>
@@ -147,7 +147,7 @@ export default function CompanyManager({ companies }: { companies: Company[] }) 
                       onClick={() => handleDelete(company)}
                       disabled={deletingId === company.id}
                       title={`Delete ${company.name}`}
-                      className="p-1.5 rounded-md text-slate-400 hover:text-rose-600 hover:bg-rose-50 disabled:opacity-50"
+                      className="p-1.5 rounded-md text-slate-500 hover:text-rose-700 hover:bg-rose-50 disabled:opacity-50"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
@@ -166,7 +166,7 @@ export default function CompanyManager({ companies }: { companies: Company[] }) 
               <h3 className="font-semibold text-slate-800 text-sm">
                 {editing ? `Edit ${editing.name}` : "Add Company / Sister Concern"}
               </h3>
-              <button onClick={closeModal} className="text-slate-400 hover:text-slate-600">
+              <button onClick={closeModal} className="text-slate-500 hover:text-slate-600">
                 <X className="w-4 h-4" />
               </button>
             </div>
@@ -263,10 +263,10 @@ export default function CompanyManager({ companies }: { companies: Company[] }) 
               </div>
 
               <label className="flex items-start gap-2 p-3 rounded-lg border border-slate-200 bg-slate-50 cursor-pointer">
-                <input type="checkbox" name="isParent" defaultChecked={editing?.isParent} className="mt-0.5 accent-indigo-600" />
+                <input type="checkbox" name="isParent" defaultChecked={editing?.isParent} className="mt-0.5 accent-brand-600" />
                 <span>
                   <span className="block font-medium text-slate-700">Parent company</span>
-                  <span className="block text-[10px] text-slate-400">Only one parent is allowed — the current parent becomes a sister concern.</span>
+                  <span className="block text-[11px] text-slate-500">Only one parent is allowed — the current parent becomes a sister concern.</span>
                 </span>
               </label>
 
@@ -287,7 +287,7 @@ export default function CompanyManager({ companies }: { companies: Company[] }) 
                 <button
                   type="submit"
                   disabled={loading}
-                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white rounded-lg font-semibold"
+                  className="px-4 py-2 bg-brand-600 hover:bg-brand-700 disabled:opacity-60 text-white rounded-lg font-semibold"
                 >
                   {loading ? "Saving..." : editing ? "Save Changes" : "Create Company"}
                 </button>
