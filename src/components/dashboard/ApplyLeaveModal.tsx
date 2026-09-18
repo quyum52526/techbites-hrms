@@ -3,8 +3,9 @@
 import { useState } from "react";
 import { CalendarPlus } from "lucide-react";
 import { submitLeaveRequest } from "@/app/actions/leaves";
-import Modal, { ModalActions, primaryButtonClass, secondaryButtonClass } from "@/components/ui/Modal";
-import FormField, { controlClass } from "@/components/ui/FormField";
+import Modal, { ModalActions } from "@/components/ui/Modal";
+import FormField from "@/components/ui/FormField";
+import { controlClass, primaryButtonClass, secondaryButtonClass } from "@/components/ui/styles";
 
 interface Props {
   employees: { id: string; firstName: string; lastName: string }[];

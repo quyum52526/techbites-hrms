@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useId, useRef, type ReactNode } from "react";
-import { X } from "lucide-react";
+import { CircleHelp, Loader2, TriangleAlert, X, type LucideIcon } from "lucide-react";
 import { clsx } from "clsx";
+import { dangerButtonClass, primaryButtonClass, secondaryButtonClass } from "./styles";
 
 const sizeClass = { md: "max-w-md", lg: "max-w-lg", "2xl": "max-w-2xl" } as const;
 
@@ -52,6 +53,12 @@ interface ModalProps {
   title: ReactNode;
   description?: ReactNode;
   size?: keyof typeof sizeClass;
+  /** Shown left of the title, e.g. a tinted status icon. */
+  icon?: ReactNode;
+  /** "alertdialog" for confirmations that interrupt the user and need a decision. */
+  role?: "dialog" | "alertdialog";
+  /** false blocks Esc, backdrop click and the close button, e.g. while a confirmed action is running. */
+  dismissible?: boolean;
   children: ReactNode;
 }
 
@@ -60,7 +67,17 @@ interface ModalProps {
  * On top of that: focus moves to `[data-autofocus]` or the first field, Tab is trapped, a backdrop click closes,
  * and focus returns to the element that opened it.
  */
-export default function Modal({ open, onClose, title, description, size = "md", children }: ModalProps) {
+export default function Modal({
+  open,
+  onClose,
+  title,
+  description,
+  size = "md",
+  icon,
+  role,
+  dismissible = true,
+  children,
+}: ModalProps) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const returnFocusRef = useRef<HTMLElement | null>(null);
   const backdropClose = useBackdropClose();
@@ -83,6 +100,7 @@ export default function Modal({ open, onClose, title, description, size = "md", 
   return (
     <dialog
       ref={dialogRef}
+      role={role}
       aria-labelledby={titleId}
       aria-describedby={description ? descriptionId : undefined}
       tabIndex={-1}
@@ -91,8 +109,10 @@ export default function Modal({ open, onClose, title, description, size = "md", 
         onClose();
         returnFocusRef.current?.focus();
       }}
+      // Esc fires "cancel" first; cancelling it keeps the dialog open.
+      onCancel={dismissible ? undefined : (event) => event.preventDefault()}
       onKeyDown={trapTabKey}
-      {...backdropClose}
+      {...(dismissible ? backdropClose : {})}
       className={clsx(
         "dialog-modal m-auto w-[calc(100%-2rem)] max-h-[90dvh] flex-col overflow-hidden rounded-xl border border-slate-200 bg-white p-0 text-slate-900 shadow-2xl focus:outline-none open:flex",
         sizeClass[size]
@@ -100,8 +120,9 @@ export default function Modal({ open, onClose, title, description, size = "md", 
     >
       {open && (
         <>
-          <div className="flex items-start justify-between gap-4 px-6 py-4 border-b border-slate-100">
-            <div>
+          <div className="flex items-start gap-3 px-6 py-4 border-b border-slate-100">
+            {icon}
+            <div className="min-w-0 flex-1">
               <h2 id={titleId} className="text-sm font-semibold text-slate-900">
                 {title}
               </h2>
@@ -114,8 +135,9 @@ export default function Modal({ open, onClose, title, description, size = "md", 
             <button
               type="button"
               aria-label="Close dialog"
+              disabled={!dismissible}
               onClick={() => dialogRef.current?.close()}
-              className="-m-1.5 p-1.5 rounded-lg text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-colors duration-150"
+              className="-m-1.5 p-1.5 rounded-lg text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-colors duration-150 disabled:opacity-50 disabled:hover:bg-transparent"
             >
               <X className="w-4 h-4" aria-hidden />
             </button>
@@ -132,7 +154,90 @@ export function ModalActions({ children }: { children: ReactNode }) {
   return <div className="flex flex-wrap justify-end gap-3 pt-4 border-t border-slate-100">{children}</div>;
 }
 
-export const secondaryButtonClass =
-  "px-4 py-2 rounded-lg border border-control text-slate-700 font-medium hover:bg-slate-50 transition-colors duration-150";
-export const primaryButtonClass =
-  "px-4 py-2 rounded-lg bg-brand-600 hover:bg-brand-700 text-white font-semibold transition-colors duration-150 disabled:opacity-60 disabled:cursor-not-allowed";
+const confirmTone = {
+  primary: { icon: CircleHelp, badge: "bg-brand-50 text-brand-700", button: primaryButtonClass },
+  danger: { icon: TriangleAlert, badge: "bg-rose-50 text-rose-700", button: dangerButtonClass },
+} as const;
+
+interface ConfirmModalProps {
+  open: boolean;
+  /** Cancel, Esc, backdrop click and the close button. Blocked while `pending`. */
+  onClose: () => void;
+  onConfirm: () => void;
+  title: ReactNode;
+  /** The consequence of confirming, in one or two sentences. Announced as the dialog's description. */
+  description: ReactNode;
+  /** Optional extra detail between the header and the buttons. */
+  children?: ReactNode;
+  confirmLabel: string;
+  pendingLabel?: string;
+  cancelLabel?: string;
+  /** "danger" for irreversible actions: warning icon, rose confirm button, and Cancel gets initial focus. */
+  tone?: keyof typeof confirmTone;
+  icon?: LucideIcon;
+  pending?: boolean;
+  /** Shown inside the dialog so the user can retry or cancel without losing context. */
+  error?: string | null;
+}
+
+/** Replaces window.confirm()/alert(): a Modal with role="alertdialog", a consequence line and Cancel/Confirm. */
+export function ConfirmModal({
+  open,
+  onClose,
+  onConfirm,
+  title,
+  description,
+  children,
+  confirmLabel,
+  pendingLabel,
+  cancelLabel = "Cancel",
+  tone = "primary",
+  icon,
+  pending = false,
+  error,
+}: ConfirmModalProps) {
+  const style = confirmTone[tone];
+  const Icon = icon ?? style.icon;
+  // Destructive: focus the safe choice so a stray Enter does not delete. Otherwise focus the action.
+  const focusCancel = tone === "danger";
+
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      role="alertdialog"
+      dismissible={!pending}
+      title={title}
+      description={description}
+      icon={
+        <span className={clsx("grid place-items-center w-9 h-9 rounded-full shrink-0", style.badge)}>
+          <Icon className="w-4 h-4" aria-hidden />
+        </span>
+      }
+    >
+      <div className="px-6 py-4 space-y-4 text-xs">
+        {children}
+        {error && (
+          <p role="alert" className="px-3 py-2 rounded-lg border border-rose-300 bg-rose-50 text-rose-800 font-medium">
+            {error}
+          </p>
+        )}
+        <div className="flex flex-wrap justify-end gap-3">
+          <button type="button" onClick={onClose} disabled={pending} data-autofocus={focusCancel || undefined} className={secondaryButtonClass}>
+            {cancelLabel}
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            disabled={pending}
+            data-autofocus={focusCancel ? undefined : true}
+            className={clsx(style.button, "inline-flex items-center gap-2")}
+          >
+            {pending && <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden />}
+            {pending ? (pendingLabel ?? confirmLabel) : confirmLabel}
+          </button>
+        </div>
+      </div>
+    </Modal>
+  );
+}

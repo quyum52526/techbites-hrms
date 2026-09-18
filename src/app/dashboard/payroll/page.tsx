@@ -1,6 +1,5 @@
 import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@prisma/client";
-import { setSalaryStructure } from "@/app/actions/payroll";
 import { Banknote, CheckCircle2, Clock3, DollarSign, Users } from "lucide-react";
 import { getActiveUser } from "@/lib/auth";
 import { getActiveCompanyId, employeeScope } from "@/lib/company";
@@ -9,10 +8,7 @@ import { formatMoney, parsePeriodParam, periodLabel as toPeriodLabel } from "@/l
 import CompanyLogo from "@/components/dashboard/CompanyLogo";
 import PayslipModal, { type PayslipData } from "@/components/dashboard/PayslipModal";
 import { PayrollControls, PayrollStatusSelect } from "@/components/dashboard/PayrollControls";
-
-const inputClass =
-  "w-full border border-slate-300 rounded-lg p-2 text-slate-900 bg-white font-medium placeholder:text-slate-500 placeholder:font-normal focus:ring-2 focus:ring-brand-600 outline-none";
-const labelClass = "block text-slate-700 font-semibold mb-1";
+import SalaryStructureForm from "@/components/dashboard/SalaryStructureForm";
 
 export default async function PayrollPage({ searchParams }: { searchParams: Promise<{ period?: string }> }) {
   const today = orgToday();
@@ -190,7 +186,7 @@ export default async function PayrollPage({ searchParams }: { searchParams: Prom
                       <td className="py-3 px-4 text-right font-mono tabular-nums text-slate-900">
                         {formatMoney(record.basicSalary + record.allowances)}
                       </td>
-                      <td className="py-3 px-4 text-right font-mono tabular-nums text-red-700">
+                      <td className="py-3 px-4 text-right font-mono tabular-nums text-rose-700">
                         {record.deductions > 0 ? `−${formatMoney(record.deductions)}` : formatMoney(0)}
                         {(record.lateDays > 0 || record.absentDays > 0) && (
                           <p className="text-[11px] text-slate-600 font-sans">
@@ -201,7 +197,11 @@ export default async function PayrollPage({ searchParams }: { searchParams: Prom
                       <td className="py-3 px-4 text-right font-mono tabular-nums font-bold text-slate-900">{formatMoney(record.netSalary)}</td>
                       <td className="py-3 px-4">
                         {canManage ? (
-                          <PayrollStatusSelect recordId={record.id} status={record.status} />
+                          <PayrollStatusSelect
+                            recordId={record.id}
+                            status={record.status}
+                            employeeName={`${record.employee.firstName} ${record.employee.lastName}`}
+                          />
                         ) : (
                           <span className="text-[11px] font-bold text-slate-900">{record.status}</span>
                         )}
@@ -273,47 +273,11 @@ export default async function PayrollPage({ searchParams }: { searchParams: Prom
 
           <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
             <h3 className="text-sm font-bold text-slate-900 mb-3 flex items-center gap-2">
-              <DollarSign className="w-4 h-4 text-brand-600" /> Set Employee Salary Structure (monthly, ৳)
+              <DollarSign className="w-4 h-4 text-brand-600" aria-hidden /> Set Employee Salary Structure (monthly, ৳)
             </h3>
-            <form action={setSalaryStructure} autoComplete="off" className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
-              <div className="col-span-2">
-                <label className={labelClass}>Employee *</label>
-                <select name="employeeId" required className={inputClass}>
-                  {employees.map((e) => (
-                    <option key={e.id} value={e.id}>
-                      {e.firstName} {e.lastName} ({e.employeeCode})
-                    </option>
-                  ))}
-                </select>
-              </div>
-              {[
-                { name: "basicSalary", label: "Basic Salary *", placeholder: "e.g. 30000", required: true },
-                { name: "houseRent", label: "House Rent", placeholder: "e.g. 15000" },
-                { name: "medicalAllow", label: "Medical Allowance", placeholder: "e.g. 2500" },
-                { name: "otherAllow", label: "Other Allowances", placeholder: "e.g. 1500" },
-                { name: "taxDeduction", label: "Income Tax", placeholder: "e.g. 1000" },
-                { name: "providentFund", label: "Provident Fund", placeholder: "e.g. 3000" },
-              ].map((field) => (
-                <div key={field.name}>
-                  <label className={labelClass}>{field.label}</label>
-                  <input
-                    type="number"
-                    min="0"
-                    step="any"
-                    name={field.name}
-                    placeholder={field.placeholder}
-                    required={field.required}
-                    autoComplete="off"
-                    className={inputClass}
-                  />
-                </div>
-              ))}
-              <div className="col-span-2 sm:col-span-4 flex justify-end">
-                <button type="submit" className="bg-brand-600 hover:bg-brand-700 text-white font-semibold py-2 px-6 rounded-lg">
-                  Save Structure
-                </button>
-              </div>
-            </form>
+            <SalaryStructureForm
+              employees={employees.map((e) => ({ id: e.id, name: `${e.firstName} ${e.lastName}`, employeeCode: e.employeeCode }))}
+            />
           </div>
         </>
       )}

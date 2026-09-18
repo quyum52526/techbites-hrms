@@ -30,27 +30,44 @@ async function getEmployeeInActiveCompany(employeeId: string) {
   return employee;
 }
 
-const amount = (formData: FormData, key: string) => {
-  const value = parseFloat((formData.get(key) as string) || "0");
-  if (isNaN(value) || value < 0) throw new Error(`Invalid amount for ${key}`);
-  return value;
-};
+const salaryFieldLabels = {
+  basicSalary: "basic salary",
+  houseRent: "house rent",
+  medicalAllow: "medical allowance",
+  otherAllow: "other allowances",
+  taxDeduction: "income tax",
+  providentFund: "provident fund",
+} as const;
 
-export async function setSalaryStructure(formData: FormData) {
+type SalaryFields = Record<keyof typeof salaryFieldLabels, number>;
+
+/** Blank amounts count as 0; anything else must be a non-negative number. */
+function parseSalary(formData: FormData): SalaryFields | { error: string } {
+  const salary = {} as SalaryFields;
+  for (const [key, label] of Object.entries(salaryFieldLabels) as [keyof SalaryFields, string][]) {
+    const value = Number(formData.get(key) || 0);
+    if (!Number.isFinite(value) || value < 0) return { error: `Enter a valid, non-negative amount for ${label}` };
+    salary[key] = value;
+  }
+  return salary;
+}
+
+/** `useActionState` action: validation problems come back as `{ ok: false }`, missing permission throws. */
+export async function setSalaryStructure(_prev: PayrollActionResult | null, formData: FormData): Promise<PayrollActionResult> {
   await requirePayrollAdmin();
 
-  const employeeId = formData.get("employeeId") as string;
-  if (!employeeId || !formData.get("basicSalary")) throw new Error("Invalid salary parameters");
+  const employeeId = formData.get("employeeId");
+  if (typeof employeeId !== "string" || !employeeId) return { ok: false, error: "Choose an employee" };
+  if (!formData.get("basicSalary")) return { ok: false, error: "Enter a basic salary" };
 
-  const salary = {
-    basicSalary: amount(formData, "basicSalary"),
-    houseRent: amount(formData, "houseRent"),
-    medicalAllow: amount(formData, "medicalAllow"),
-    otherAllow: amount(formData, "otherAllow"),
-    taxDeduction: amount(formData, "taxDeduction"),
-    providentFund: amount(formData, "providentFund"),
-  };
-  await getEmployeeInActiveCompany(employeeId);
+  const salary = parseSalary(formData);
+  if ("error" in salary) return { ok: false, error: salary.error };
+
+  try {
+    await getEmployeeInActiveCompany(employeeId);
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : "Employee not found" };
+  }
 
   await prisma.salaryStructure.upsert({
     where: { employeeId },
@@ -59,6 +76,7 @@ export async function setSalaryStructure(formData: FormData) {
   });
 
   revalidatePath("/dashboard/payroll");
+  return { ok: true, message: "Saved successfully" };
 }
 
 /**

@@ -2,11 +2,14 @@
 
 import { useState, useTransition } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { CalendarDays, Loader2, PlayCircle } from "lucide-react";
+import { Banknote, CalendarDays, Loader2, PlayCircle } from "lucide-react";
 import { clsx } from "clsx";
 import type { PayrollStatus } from "@prisma/client";
-import { generatePayroll, updatePayrollStatus, type PayrollActionResult } from "@/app/actions/payroll";
+import { generatePayroll, updatePayrollStatus } from "@/app/actions/payroll";
 import { parsePeriodParam, periodParam, type PayrollPeriod } from "@/lib/payroll";
+import FormField from "@/components/ui/FormField";
+import { ConfirmModal } from "@/components/ui/Modal";
+import { controlClass } from "@/components/ui/styles";
 
 interface ControlsProps {
   period: PayrollPeriod;
@@ -19,21 +22,33 @@ interface ControlsProps {
 export function PayrollControls({ period, periodLabel, activeCompanyId, scopeLabel, hasRecords }: ControlsProps) {
   const router = useRouter();
   const pathname = usePathname();
-  const [result, setResult] = useState<PayrollActionResult | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [isNavigating, startNavigation] = useTransition();
+  const [confirmOpen, setConfirmOpen] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [generateError, setGenerateError] = useState<string | null>(null);
+  const verb = hasRecords ? "Regenerate" : "Generate";
 
+  const openConfirm = () => {
+    setGenerateError(null);
+    setSuccessMessage(null);
+    setConfirmOpen(true);
+  };
+
+  // Failures stay in the dialog so the admin can retry or cancel; success closes it and reports below the controls.
   const handleGenerate = async () => {
-    const verb = hasRecords ? "Regenerate" : "Generate";
-    if (!confirm(`${verb} payroll for ${periodLabel} (${scopeLabel})?${hasRecords ? "\n\nUnpaid pay-slips are recalculated; PAID ones are left unchanged." : ""}`)) {
-      return;
-    }
     setIsGenerating(true);
-    setResult(null);
+    setGenerateError(null);
     try {
-      setResult(await generatePayroll(period.month, period.year, activeCompanyId ?? undefined));
+      const result = await generatePayroll(period.month, period.year, activeCompanyId ?? undefined);
+      if (result.ok) {
+        setConfirmOpen(false);
+        setSuccessMessage(result.message);
+      } else {
+        setGenerateError(result.error);
+      }
     } catch {
-      setResult({ ok: false, error: "Payroll generation failed. Please try again." });
+      setGenerateError("Payroll generation failed. Please try again.");
     } finally {
       setIsGenerating(false);
     }
@@ -42,62 +57,77 @@ export function PayrollControls({ period, periodLabel, activeCompanyId, scopeLab
   return (
     <div className="flex flex-col items-end gap-2">
       <div className="flex items-center gap-2">
-        <label className="relative flex items-center">
-          <span className="sr-only">Payroll month</span>
-          <CalendarDays className="w-4 h-4 absolute left-2.5 text-slate-600 pointer-events-none" />
-          <input
-            type="month"
-            autoComplete="off"
-            value={periodParam(period)}
-            onChange={(e) => {
-              const next = parsePeriodParam(e.target.value);
-              if (!next) return;
-              setResult(null);
-              startNavigation(() => router.push(`${pathname}?period=${periodParam(next)}`));
-            }}
-            className="pl-8 pr-2 py-1.5 text-xs font-medium text-slate-900 bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-600"
-          />
-        </label>
+        <div className="relative w-44">
+          <CalendarDays className="w-4 h-4 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-600 pointer-events-none" aria-hidden />
+          <FormField label="Payroll month" hideLabel>
+            <input
+              type="month"
+              autoComplete="off"
+              value={periodParam(period)}
+              disabled={isGenerating}
+              onChange={(e) => {
+                const next = parsePeriodParam(e.target.value);
+                if (!next) return;
+                setSuccessMessage(null);
+                startNavigation(() => router.push(`${pathname}?period=${periodParam(next)}`));
+              }}
+              className={clsx(controlClass, "pl-8 py-1.5 text-xs font-medium")}
+            />
+          </FormField>
+        </div>
         <button
-          onClick={handleGenerate}
+          onClick={openConfirm}
           disabled={isGenerating || isNavigating}
-          className="flex items-center gap-2 bg-brand-600 hover:bg-brand-700 disabled:opacity-60 text-white text-xs font-semibold px-4 py-2 rounded-lg shadow-sm"
+          className="flex items-center gap-2 bg-brand-600 hover:bg-brand-700 disabled:opacity-60 disabled:cursor-not-allowed text-white text-xs font-semibold px-4 py-2 rounded-lg shadow-sm transition-colors duration-150"
         >
-          {isGenerating ? <Loader2 className="w-4 h-4 animate-spin" /> : <PlayCircle className="w-4 h-4" />}
-          {isGenerating ? "Generating..." : hasRecords ? "Regenerate Payroll" : "Generate Payroll"}
+          {isGenerating ? <Loader2 className="w-4 h-4 animate-spin" aria-hidden /> : <PlayCircle className="w-4 h-4" aria-hidden />}
+          {isGenerating ? "Generating…" : `${verb} Payroll`}
         </button>
       </div>
-      {result && (
-        <p
-          role="status"
-          className={clsx(
-            "px-3 py-1.5 rounded-lg border text-xs font-semibold text-black max-w-md text-right",
-            result.ok ? "bg-emerald-100 border-emerald-300" : "bg-red-100 border-red-300"
-          )}
-        >
-          {result.ok ? result.message : result.error}
+      {successMessage && (
+        <p role="status" className="px-3 py-1.5 rounded-lg border border-emerald-200 bg-emerald-50 text-xs font-semibold text-emerald-700 max-w-md text-right">
+          {successMessage}
         </p>
       )}
+
+      <ConfirmModal
+        open={confirmOpen}
+        onClose={() => setConfirmOpen(false)}
+        onConfirm={handleGenerate}
+        icon={Banknote}
+        title={`${verb} payroll for ${periodLabel}?`}
+        description={`Pay-slips are calculated for every active employee with a salary structure in ${scopeLabel}, including late and absent fines from ${periodLabel} attendance.`}
+        confirmLabel={`${verb} Payroll`}
+        pendingLabel="Generating…"
+        pending={isGenerating}
+        error={generateError}
+      >
+        {hasRecords && (
+          <p className="px-3 py-2 rounded-lg border border-amber-200 bg-amber-50 text-amber-800 font-medium">
+            Pay-slips already exist for this month. Unpaid ones are recalculated; PAID ones are left unchanged.
+          </p>
+        )}
+      </ConfirmModal>
     </div>
   );
 }
 
 const PAYROLL_STATUSES: PayrollStatus[] = ["DRAFT", "GENERATED", "PAID"];
 
+// Status text is *-700 on a *-50 tint; borders are *-600 so the control edge clears 3:1 (WCAG 1.4.11).
 const statusStyles: Record<PayrollStatus, string> = {
-  DRAFT: "bg-slate-100 text-slate-900 border-slate-300",
-  GENERATED: "bg-amber-100 text-amber-950 border-amber-300",
-  PAID: "bg-emerald-100 text-emerald-950 border-emerald-300",
+  DRAFT: "bg-slate-50 text-slate-700 border-control",
+  GENERATED: "bg-amber-50 text-amber-700 border-amber-600",
+  PAID: "bg-emerald-50 text-emerald-700 border-emerald-600",
 };
 
-export function PayrollStatusSelect({ recordId, status }: { recordId: string; status: PayrollStatus }) {
+export function PayrollStatusSelect({ recordId, status, employeeName }: { recordId: string; status: PayrollStatus; employeeName: string }) {
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
   return (
-    <div className="flex flex-col gap-1">
+    <FormField label={`Payroll status for ${employeeName}`} hideLabel error={error}>
       <select
-        aria-label="Payroll status"
         value={status}
         disabled={isPending}
         onChange={(e) => {
@@ -113,17 +143,16 @@ export function PayrollStatusSelect({ recordId, status }: { recordId: string; st
           });
         }}
         className={clsx(
-          "px-2 py-1 rounded-md border text-[11px] font-bold cursor-pointer focus:outline-none focus:ring-2 focus:ring-brand-600 disabled:opacity-60",
+          "px-2 py-1 rounded-md border text-[11px] font-bold cursor-pointer transition-shadow duration-150 focus:outline-none focus:ring-2 focus:ring-brand-600/30 disabled:opacity-60 aria-invalid:border-rose-700",
           statusStyles[status]
         )}
       >
         {PAYROLL_STATUSES.map((s) => (
-          <option key={s} value={s} className="bg-white text-black">
+          <option key={s} value={s} className="bg-white text-slate-900">
             {s}
           </option>
         ))}
       </select>
-      {error && <span className="text-[11px] font-semibold text-black bg-red-100 border border-red-300 rounded px-1.5 py-0.5">{error}</span>}
-    </div>
+    </FormField>
   );
 }

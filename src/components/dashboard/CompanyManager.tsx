@@ -5,8 +5,9 @@ import { Building, Pencil, Plus, Trash2 } from "lucide-react";
 import { clsx } from "clsx";
 import { createCompany, deleteCompany, updateCompany } from "@/app/actions/company";
 import CompanyLogo from "@/components/dashboard/CompanyLogo";
-import Modal, { ModalActions, primaryButtonClass, secondaryButtonClass } from "@/components/ui/Modal";
-import FormField, { controlClass } from "@/components/ui/FormField";
+import Modal, { ConfirmModal, ModalActions } from "@/components/ui/Modal";
+import FormField from "@/components/ui/FormField";
+import { controlClass, primaryButtonClass, secondaryButtonClass } from "@/components/ui/styles";
 
 interface Company {
   id: string;
@@ -23,12 +24,13 @@ interface Company {
 
 type ModalState = { mode: "create" } | { mode: "edit"; company: Company } | null;
 
-
 export default function CompanyManager({ companies }: { companies: Company[] }) {
   const [modal, setModal] = useState<ModalState>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Company | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const [logoPreview, setLogoPreview] = useState("");
 
   const editing = modal?.mode === "edit" ? modal.company : null;
@@ -60,16 +62,23 @@ export default function CompanyManager({ companies }: { companies: Company[] }) 
     }
   };
 
-  const handleDelete = async (company: Company) => {
-    if (!confirm(`Delete ${company.name} (${company.code})? This cannot be undone.`)) return;
-    setDeletingId(company.id);
+  const openDelete = (company: Company) => {
+    setDeleteError(null);
+    setDeleteTarget(company);
+  };
+
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    setDeleteError(null);
     try {
-      const result = await deleteCompany(company.id);
-      if (!result.ok) alert(result.error);
+      const result = await deleteCompany(deleteTarget.id);
+      if (result.ok) setDeleteTarget(null);
+      else setDeleteError(result.error);
     } catch {
-      alert("Failed to delete company");
+      setDeleteError("Failed to delete company. Please try again.");
     } finally {
-      setDeletingId(null);
+      setDeleting(false);
     }
   };
 
@@ -137,18 +146,19 @@ export default function CompanyManager({ companies }: { companies: Company[] }) 
                   <td className="py-2.5 text-right whitespace-nowrap">
                     <button
                       onClick={() => openModal({ mode: "edit", company })}
+                      aria-label={`Edit ${company.name}`}
                       title={`Edit ${company.name}`}
-                      className="p-1.5 rounded-md text-slate-500 hover:text-brand-600 hover:bg-brand-50"
+                      className="p-1.5 rounded-md text-slate-500 hover:text-brand-600 hover:bg-brand-50 transition-colors duration-150"
                     >
-                      <Pencil className="w-3.5 h-3.5" />
+                      <Pencil className="w-3.5 h-3.5" aria-hidden />
                     </button>
                     <button
-                      onClick={() => handleDelete(company)}
-                      disabled={deletingId === company.id}
+                      onClick={() => openDelete(company)}
+                      aria-label={`Delete ${company.name}`}
                       title={`Delete ${company.name}`}
-                      className="p-1.5 rounded-md text-slate-500 hover:text-rose-700 hover:bg-rose-50 disabled:opacity-50"
+                      className="p-1.5 rounded-md text-slate-500 hover:text-rose-700 hover:bg-rose-50 transition-colors duration-150"
                     >
-                      <Trash2 className="w-3.5 h-3.5" />
+                      <Trash2 className="w-3.5 h-3.5" aria-hidden />
                     </button>
                   </td>
                 </tr>
@@ -236,6 +246,23 @@ export default function CompanyManager({ companies }: { companies: Company[] }) 
           </ModalActions>
         </form>
       </Modal>
+
+      <ConfirmModal
+        open={deleteTarget !== null}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={handleDelete}
+        tone="danger"
+        title={deleteTarget ? `Delete ${deleteTarget.name}?` : ""}
+        description={
+          deleteTarget
+            ? `${deleteTarget.name} (${deleteTarget.code}) will be permanently removed. Its departments are kept but detached. This cannot be undone.`
+            : ""
+        }
+        confirmLabel="Delete Company"
+        pendingLabel="Deleting…"
+        pending={deleting}
+        error={deleteError}
+      />
     </div>
   );
 }

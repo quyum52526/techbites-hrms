@@ -28,7 +28,7 @@ export const navItems = [
   { label: "Departments", href: "/dashboard/departments", icon: Building2, roles: ["SUPER_ADMIN", "HR_ADMIN"] },
   { label: "Reports & BI", href: "/dashboard/reports", icon: BarChart3, roles: ["SUPER_ADMIN", "HR_ADMIN"] },
   { label: "Performance", href: "/dashboard/performance", icon: Gauge, roles: ["SUPER_ADMIN", "HR_ADMIN", "TEAM_LEADER"] },
-  { label: "Settings", href: "/dashboard/settings", icon: Settings, roles: ["SUPER_ADMIN"] },
+  { label: "Settings", href: "/dashboard/settings", icon: Settings, roles: ["SUPER_ADMIN", "HR_ADMIN"] },
 ];
 
 function isActiveRoute(pathname: string, href: string) {

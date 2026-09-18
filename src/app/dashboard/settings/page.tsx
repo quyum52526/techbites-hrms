@@ -1,19 +1,20 @@
 import { prisma } from "@/lib/prisma";
-import { updateShiftConfig } from "@/app/actions/settings";
 import { getCompanies } from "@/app/actions/company";
 import { getActiveUser } from "@/lib/auth";
 import CompanyManager from "@/components/dashboard/CompanyManager";
-import { Settings, ShieldAlert, Clock, Building2, Save } from "lucide-react";
+import ShiftPolicyForm from "@/components/dashboard/ShiftPolicyForm";
+import { Settings, ShieldAlert, Clock, Building2 } from "lucide-react";
 
 export default async function SettingsPage() {
   const user = await getActiveUser();
-  const canManageCompanies = user.role === "SUPER_ADMIN" || user.role === "HR_ADMIN";
+  // Same roles the shift and company server actions accept.
+  const canManage = user.role === "SUPER_ADMIN" || user.role === "HR_ADMIN";
 
   const [defaultShift, leaveTypes, adminUser, companies] = await Promise.all([
     prisma.shift.findFirst(),
     prisma.leaveType.findMany(),
     prisma.user.findFirst({ where: { role: "SUPER_ADMIN" } }),
-    canManageCompanies ? getCompanies() : Promise.resolve([]),
+    canManage ? getCompanies() : Promise.resolve([]),
   ]);
 
   return (
@@ -31,66 +32,32 @@ export default async function SettingsPage() {
             <span>Attendance & Shift Policy</span>
           </div>
 
-          {defaultShift ? (
-            <form action={updateShiftConfig} className="space-y-3 text-xs">
-              <input type="hidden" name="shiftId" value={defaultShift.id} />
-
-              <div>
-                <label className="block text-slate-600 font-medium mb-1">Shift Name</label>
-                <input
-                  type="text"
-                  disabled
-                  value={defaultShift.name}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-slate-500 cursor-not-allowed"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-slate-600 font-medium mb-1">Punch-in Window Start</label>
-                  <input
-                    type="time"
-                    name="startTime"
-                    defaultValue={defaultShift.startTime}
-                    required
-                    className="w-full border border-slate-200 rounded-lg p-2 focus:ring-2 focus:ring-brand-600 outline-none"
-                  />
+          {defaultShift && canManage ? (
+            <ShiftPolicyForm
+              shift={{
+                id: defaultShift.id,
+                name: defaultShift.name,
+                startTime: defaultShift.startTime,
+                endTime: defaultShift.endTime,
+                graceMinutes: defaultShift.graceMinutes,
+              }}
+            />
+          ) : defaultShift ? (
+            <dl className="divide-y divide-slate-100 text-xs">
+              {[
+                { term: "Shift name", value: defaultShift.name },
+                { term: "Punch-in window start", value: defaultShift.startTime },
+                { term: "Punch-out window end", value: defaultShift.endTime },
+                { term: "Late grace window", value: `${defaultShift.graceMinutes} minutes` },
+              ].map((item) => (
+                <div key={item.term} className="py-2.5 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-0.5">
+                  <dt className="text-slate-600 font-medium">{item.term}</dt>
+                  <dd className="text-slate-900 font-medium tabular-nums">{item.value}</dd>
                 </div>
-                <div>
-                  <label className="block text-slate-600 font-medium mb-1">Punch-out Window End</label>
-                  <input
-                    type="time"
-                    name="endTime"
-                    defaultValue={defaultShift.endTime}
-                    required
-                    className="w-full border border-slate-200 rounded-lg p-2 focus:ring-2 focus:ring-brand-600 outline-none"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-slate-600 font-medium mb-1">Late Grace Window (Minutes)</label>
-                <input
-                  type="number"
-                  name="graceMinutes"
-                  defaultValue={defaultShift.graceMinutes}
-                  required
-                  className="w-full border border-slate-200 rounded-lg p-2 focus:ring-2 focus:ring-brand-600 outline-none"
-                />
-                <span className="text-[11px] text-slate-500 mt-1 block">
-                  Punches after {defaultShift.graceMinutes} minutes past start time trigger &ldquo;LATE&rdquo; status.
-                </span>
-              </div>
-
-              <button
-                type="submit"
-                className="flex items-center justify-center gap-2 w-full py-2 bg-brand-600 hover:bg-brand-700 text-white font-semibold rounded-lg shadow-sm transition-colors"
-              >
-                <Save className="w-3.5 h-3.5" /> Save Shift Policies
-              </button>
-            </form>
+              ))}
+            </dl>
           ) : (
-            <p className="text-xs text-slate-500">No shift record found to configure.</p>
+            <p className="text-xs text-slate-600">No shift record found to configure.</p>
           )}
         </div>
 
@@ -101,39 +68,23 @@ export default async function SettingsPage() {
             <span>Organization Profile</span>
           </div>
 
-          <div className="space-y-3 text-xs">
-            <div>
-              <label className="block text-slate-600 font-medium mb-1">Company Legal Entity</label>
-              <input
-                type="text"
-                disabled
-                value="TechBites HRMS Global Ltd."
-                className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-slate-700 cursor-not-allowed font-medium"
-              />
-            </div>
-            <div>
-              <label className="block text-slate-600 font-medium mb-1">Primary Master Administrator</label>
-              <input
-                type="text"
-                disabled
-                value={adminUser?.email ?? "admin@techbites.com"}
-                className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-slate-700 cursor-not-allowed font-medium"
-              />
-            </div>
-            <div>
-              <label className="block text-slate-600 font-medium mb-1">Timezone & Locale</label>
-              <input
-                type="text"
-                disabled
-                value="Asia/Dhaka (GMT+6)"
-                className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-slate-500 cursor-not-allowed"
-              />
-            </div>
-          </div>
+          {/* Read-only facts, so a description list rather than disabled inputs that look editable. */}
+          <dl className="divide-y divide-slate-100 text-xs">
+            {[
+              { term: "Company legal entity", value: "TechBites HRMS Global Ltd." },
+              { term: "Primary master administrator", value: adminUser?.email ?? "admin@techbites.com" },
+              { term: "Timezone & locale", value: "Asia/Dhaka (GMT+6)" },
+            ].map((item) => (
+              <div key={item.term} className="py-2.5 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-0.5">
+                <dt className="text-slate-600 font-medium">{item.term}</dt>
+                <dd className="text-slate-900 font-medium break-all">{item.value}</dd>
+              </div>
+            ))}
+          </dl>
         </div>
 
         {/* Sister Concerns & Companies */}
-        {canManageCompanies && (
+        {canManage && (
           <div className="lg:col-span-2">
             <CompanyManager companies={companies} />
           </div>

@@ -3,8 +3,9 @@
 import { useState } from "react";
 import { UserPlus } from "lucide-react";
 import { createEmployee } from "@/app/actions/employees";
-import Modal, { ModalActions, primaryButtonClass, secondaryButtonClass } from "@/components/ui/Modal";
-import FormField, { controlClass } from "@/components/ui/FormField";
+import Modal, { ModalActions } from "@/components/ui/Modal";
+import FormField from "@/components/ui/FormField";
+import { controlClass, primaryButtonClass, secondaryButtonClass } from "@/components/ui/styles";
 
 interface Props {
   companies: { id: string; name: string; code: string }[];

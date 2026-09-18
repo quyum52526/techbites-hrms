@@ -263,7 +263,7 @@ export default async function AttendancePage({ searchParams }: { searchParams: P
                 name="date"
                 defaultValue={day ? toDateParam(day) : toDateParam(orgToday())}
                 max={toDateParam(orgToday())}
-                className="h-8 rounded-lg border border-slate-300 bg-white px-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-600"
+                className="h-8 rounded-lg border border-control bg-white px-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-600"
               />
             </label>
             {filter !== "not-punched-in" && filter !== "on-leave" && (
@@ -272,7 +272,7 @@ export default async function AttendancePage({ searchParams }: { searchParams: P
                 <select
                   name="status"
                   defaultValue={status ?? ""}
-                  className="h-8 rounded-lg border border-slate-300 bg-white px-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-600"
+                  className="h-8 rounded-lg border border-control bg-white px-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-600"
                 >
                   <option value="">Any status</option>
                   {Object.values(AttendanceStatus).map((s) => (

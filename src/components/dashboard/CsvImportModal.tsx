@@ -4,7 +4,8 @@ import { useRef, useState } from "react";
 import { Download, FileSpreadsheet, Upload } from "lucide-react";
 import { clsx } from "clsx";
 import { MAX_IMPORT_FILE_BYTES, type ImportResult } from "@/lib/import-result";
-import Modal, { ModalActions, primaryButtonClass, secondaryButtonClass } from "@/components/ui/Modal";
+import Modal, { ModalActions } from "@/components/ui/Modal";
+import { primaryButtonClass, secondaryButtonClass } from "@/components/ui/styles";
 
 interface Props {
   buttonLabel: string;
@@ -135,8 +136,8 @@ export default function CsvImportModal({ buttonLabel, title, description, column
               <p
                 role={result.ok ? "status" : "alert"}
                 className={clsx(
-                  "px-3 py-2 rounded-lg font-semibold text-black border",
-                  result.ok ? "bg-emerald-100 border-emerald-300" : "bg-red-100 border-red-300"
+                  "px-3 py-2 rounded-lg font-semibold border",
+                  result.ok ? "bg-emerald-50 border-emerald-200 text-emerald-700" : "bg-rose-50 border-rose-300 text-rose-800"
                 )}
               >
                 {result.message}
@@ -154,27 +155,27 @@ export default function CsvImportModal({ buttonLabel, title, description, column
               )}
 
               {result.issues.length > 0 && (
-                <div className="rounded-lg border border-red-300 overflow-hidden">
+                <div className="rounded-lg border border-rose-300 overflow-hidden">
                   <div className="max-h-56 overflow-y-auto">
                     <table className="w-full text-left">
-                      <thead className="bg-red-100 text-black sticky top-0">
+                      <thead className="bg-rose-50 text-rose-800 sticky top-0">
                         <tr>
                           <th className="py-1.5 px-3 font-semibold w-16">Line</th>
                           <th className="py-1.5 px-3 font-semibold">Issue</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-red-100">
+                      <tbody className="divide-y divide-rose-100">
                         {result.issues.slice(0, MAX_VISIBLE_ISSUES).map((issue, i) => (
                           <tr key={i}>
-                            <td className="py-1.5 px-3 font-mono text-black">{issue.line}</td>
-                            <td className="py-1.5 px-3 text-black font-medium">{issue.message}</td>
+                            <td className="py-1.5 px-3 font-mono text-slate-900">{issue.line}</td>
+                            <td className="py-1.5 px-3 text-slate-900 font-medium">{issue.message}</td>
                           </tr>
                         ))}
                       </tbody>
                     </table>
                   </div>
                   {result.issues.length > MAX_VISIBLE_ISSUES && (
-                    <p className="px-3 py-1.5 bg-red-50 text-black font-medium border-t border-red-200">
+                    <p className="px-3 py-1.5 bg-rose-50 text-rose-800 font-medium border-t border-rose-200">
                       …and {(result.issues.length - MAX_VISIBLE_ISSUES).toLocaleString()} more
                     </p>
                   )}
