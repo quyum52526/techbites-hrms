@@ -37,13 +37,11 @@ export default function Sidebar({ user }: { user: { email: string; role: Role } 
     <aside className="w-64 bg-slate-900 text-slate-100 flex flex-col shrink-0 min-h-screen border-r border-slate-800">
       {/* Brand Header */}
       <div className="h-16 flex items-center px-6 gap-3 border-b border-slate-800">
-        <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center font-bold text-white shadow-lg shadow-indigo-500/30">
-          TB
-        </div>
-        <div>
-          <h1 className="font-semibold text-sm tracking-wide">TechBites</h1>
-          <p className="text-[10px] text-slate-400 uppercase tracking-wider">HRMS Suite</p>
-        </div>
+        <img
+          src="/tech-bites-hrms-logo.png"
+          alt="TechBites HRMS"
+          className="h-9 w-auto max-w-[180px] object-contain"
+        />
       </div>
 
       {/* Navigation */}
