@@ -386,3 +386,69 @@ model AppraisalReview {
 
   @@unique([cycleId, employeeId])
 }
+
+// PayPulse integration models. These deliberately use their own namespace and
+// do not add relations to the existing HRMS models, so the established HR
+// schema and generated client contracts remain unchanged.
+enum PayModel {
+  HOURLY
+  DAILY
+  QUANTITY
+  MONTHLY
+}
+
+model Device {
+  id           String   @id @default(cuid())
+  company_id   String
+  device_sn    String
+  name         String?
+  location     String?
+  last_seen_at DateTime?
+  is_active    Boolean  @default(true)
+  created_at   DateTime @default(now())
+  updated_at   DateTime @updatedAt
+
+  @@unique([company_id, device_sn])
+  @@index([company_id])
+}
+
+model RawAttendanceLog {
+  id              String   @id @default(cuid())
+  company_id      String
+  device_sn       String
+  device_user_id  String
+  employee_id     String?
+  punch_type      String?
+  punch_timestamp DateTime
+  processed       Boolean  @default(false)
+
+  @@unique([device_sn, device_user_id, punch_timestamp])
+  @@index([device_user_id, punch_timestamp])
+  @@index([processed])
+  @@index([company_id])
+}
+
+model DailyAttendanceSummary {
+  id                 String   @id @default(cuid())
+  employee_id        String
+  work_date          DateTime
+  first_in           DateTime?
+  last_out           DateTime?
+  total_logged_hours Float    @default(0)
+  overtime_hours     Float    @default(0)
+  late_minutes       Int      @default(0)
+  attendance_status  String
+  produced_units     Int?
+
+  @@unique([employee_id, work_date])
+  @@index([employee_id, work_date])
+}
+
+model PayrollConfig {
+  id         String   @id @default(cuid())
+  department String
+  pay_model  PayModel
+  rules_json String
+
+  @@unique([department, pay_model])
+}
