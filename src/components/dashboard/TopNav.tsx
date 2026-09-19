@@ -1,17 +1,19 @@
 import { Bell } from "lucide-react";
-import type { Role } from "@prisma/client";
-import { roleLabels } from "@/lib/auth-shared";
+import UserMenu, { type MenuAccount } from "@/components/dashboard/UserMenu";
 import CompanySwitcher from "@/components/dashboard/CompanySwitcher";
 import CommandPalette from "@/components/dashboard/CommandPalette";
 import { MobileNavTrigger } from "@/components/dashboard/MobileNav";
 
 interface Props {
-  role: Role;
+  user: MenuAccount;
+  /** Development only; null hides account switching. */
+  switchableAccounts: MenuAccount[] | null;
   companies: { id: string; name: string; code: string; logoUrl: string | null }[];
   activeCompanyId: string | null;
 }
 
-export default function TopNav({ role, companies, activeCompanyId }: Props) {
+export default function TopNav({ user, switchableAccounts, companies, activeCompanyId }: Props) {
+  const { role } = user;
   const canSwitchCompany = role === "SUPER_ADMIN" || role === "HR_ADMIN";
 
   return (
@@ -23,9 +25,6 @@ export default function TopNav({ role, companies, activeCompanyId }: Props) {
 
       <div className="flex items-center gap-2 sm:gap-3 shrink-0">
         {canSwitchCompany && <CompanySwitcher companies={companies} activeCompanyId={activeCompanyId} />}
-        <span className="hidden sm:inline-flex px-2.5 py-1 rounded-full bg-accent-50 text-accent-700 text-[11px] font-semibold tracking-wide">
-          {roleLabels[role]}
-        </span>
         {/* No notification feed exists yet, so the bell shows no unread dot rather than a permanent false one. */}
         <button
           type="button"
@@ -34,6 +33,7 @@ export default function TopNav({ role, companies, activeCompanyId }: Props) {
         >
           <Bell className="w-4 h-4" aria-hidden />
         </button>
+        <UserMenu user={user} switchableAccounts={switchableAccounts} />
       </div>
     </header>
   );

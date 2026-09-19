@@ -1,34 +1,54 @@
+import { cache } from "react";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { Role } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { SESSION_COOKIE, verifySessionToken } from "@/lib/session";
 export { assignableRoles, canChangeRole, isTeamLead, roleLabels } from "@/lib/auth-shared";
-
-const ACTIVE_USER_COOKIE = "techbites-active-user";
 
 export type ActiveUser = {
   id: string;
   email: string;
   role: Role;
   employeeId: string | null;
+  /** Employee name, or null for a login without an employee record. */
+  name: string | null;
 };
 
-const activeUserSelect = { id: true, email: true, role: true, isActive: true, employee: { select: { id: true } } } as const;
+/** Why a session was rejected; shown on the login page. */
+export type SessionProblem = "signed-out" | "deactivated" | "expired";
 
+/**
+ * The signed-in user from the session cookie, re-checked against the database on every request, so a deactivated
+ * or deleted account loses access at once. `cache` shares one lookup between the layout, page and actions of a request.
+ */
+export const readSession = cache(async (): Promise<{ user: ActiveUser } | { problem: SessionProblem }> => {
+  const userId = await verifySessionToken((await cookies()).get(SESSION_COOKIE)?.value);
+  if (!userId) return { problem: "signed-out" };
+
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true, email: true, role: true, isActive: true, employee: { select: { id: true, firstName: true, lastName: true } } },
+  });
+  if (!user) return { problem: "expired" };
+  if (!user.isActive) return { problem: "deactivated" };
+
+  return {
+    user: {
+      id: user.id,
+      email: user.email,
+      role: user.role,
+      employeeId: user.employee?.id ?? null,
+      name: user.employee ? `${user.employee.firstName} ${user.employee.lastName}` : null,
+    },
+  };
+});
+
+/** The signed-in user; anyone else is sent to /login (with the reason, when the session named a closed account). */
 export async function getActiveUser(): Promise<ActiveUser> {
-  const cookieStore = await cookies();
-  const requestedId = cookieStore.get(ACTIVE_USER_COOKIE)?.value;
-
-  // A cookie that names a deactivated (e.g. released) or deleted account must never fall back to the default
-  // admin below, or revoking a login would grant Super Admin instead.
-  const user = requestedId
-    ? await prisma.user.findUnique({ where: { id: requestedId }, select: activeUserSelect })
-    : await prisma.user.findFirst({ where: { email: "admin@techbites.com" }, select: activeUserSelect });
-
-  if (!user) throw new Error(requestedId ? "This account no longer exists" : "No active user is configured");
-  if (!user.isActive) throw new Error("This account has been deactivated");
-
-  return { id: user.id, email: user.email, role: user.role, employeeId: user.employee?.id ?? null };
+  const session = await readSession();
+  if ("user" in session) return session.user;
+  redirect(session.problem === "signed-out" ? "/login" : `/login?reason=${session.problem}`);
 }
 
 const HR_ADMIN_ROLES: Role[] = [Role.SUPER_ADMIN, Role.HR_ADMIN];
@@ -48,14 +68,6 @@ export async function requireRole(roles: readonly Role[]): Promise<ActiveUser> {
 
 /** Page guard for HR-admin-only pages. */
 export const requireHRAdmin = () => requireRole(HR_ADMIN_ROLES);
-
-export async function setActiveUser(userId: string) {
-  const user = await prisma.user.findFirst({ where: { id: userId, isActive: true }, select: { id: true } });
-  if (!user) throw new Error("User not found");
-
-  const cookieStore = await cookies();
-  cookieStore.set(ACTIVE_USER_COOKIE, user.id, { httpOnly: true, sameSite: "lax", path: "/" });
-}
 
 export function canAccess(role: Role, permission: "admin" | "hr" | "team" | "self") {
   if (role === Role.SUPER_ADMIN) return true;

@@ -4,6 +4,20 @@ import { MobileNavProvider } from "@/components/dashboard/MobileNav";
 import { getActiveUser } from "@/lib/auth";
 import { getActiveCompanyId } from "@/lib/company";
 import { prisma } from "@/lib/prisma";
+import { ROLE_OPTIONS } from "@/lib/auth-shared";
+
+/** Development-only list for the user menu's account switcher: active logins, highest access first. */
+async function loadSwitchableAccounts() {
+  const users = await prisma.user.findMany({
+    where: { isActive: true },
+    select: { id: true, email: true, role: true, employee: { select: { firstName: true, lastName: true } } },
+    orderBy: { email: "asc" },
+    take: 50,
+  });
+  return users
+    .map(({ employee, ...user }) => ({ ...user, name: employee ? `${employee.firstName} ${employee.lastName}` : null }))
+    .sort((a, b) => ROLE_OPTIONS.indexOf(b.role) - ROLE_OPTIONS.indexOf(a.role));
+}
 
 export default async function DashboardLayout({
   children,
@@ -12,6 +26,7 @@ export default async function DashboardLayout({
 }) {
   const user = await getActiveUser();
   const canSwitchCompany = user.role === "SUPER_ADMIN" || user.role === "HR_ADMIN";
+  const switchableAccounts = process.env.NODE_ENV === "production" ? null : await loadSwitchableAccounts();
   const [companies, activeCompanyId] = canSwitchCompany
     ? await Promise.all([
         prisma.company.findMany({
@@ -27,7 +42,12 @@ export default async function DashboardLayout({
       <div className="flex h-dvh overflow-hidden bg-surface-muted">
         <Sidebar user={user} />
         <div className="flex-1 flex flex-col min-w-0 overflow-y-auto">
-          <TopNav role={user.role} companies={companies} activeCompanyId={activeCompanyId} />
+          <TopNav
+            user={{ id: user.id, email: user.email, role: user.role, name: user.name }}
+            switchableAccounts={switchableAccounts}
+            companies={companies}
+            activeCompanyId={activeCompanyId}
+          />
           <main className="flex-1 p-4 sm:p-6">{children}</main>
         </div>
       </div>
