@@ -3,36 +3,56 @@ import { clsx } from "clsx";
 import { LeaveStatus, type Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import ApplyLeaveModal from "@/components/dashboard/ApplyLeaveModal";
+import LeaveBalanceRegister, { type LeaveRegisterRow } from "@/components/dashboard/LeaveBalanceRegister";
 import { updateLeaveStatus } from "@/app/actions/leaves";
 import { canAccess, getActiveUser, isTeamLead } from "@/lib/auth";
-import { employeeScope, getActiveCompanyId } from "@/lib/company";
+import { employeeScope, getActiveCompanyId, workforceScope } from "@/lib/company";
+import { getLeaveBalances } from "@/lib/leave-balance";
+import { balanceStatus, leaveStatusBadgeClass, leaveStatusLabels, PENDING_LEAVE_STATUSES } from "@/lib/leave-shared";
 import { CalendarDays, Check, X, Clock } from "lucide-react";
-
-const PENDING_STATUSES: LeaveStatus[] = [LeaveStatus.PENDING_TL, LeaveStatus.PENDING_MANAGER, LeaveStatus.PENDING_HR];
 
 /** A single approval stage, or the virtual "PENDING" filter covering every in-flight stage. */
 type LeaveFilter = LeaveStatus | "PENDING";
 
-const STATUS_LABELS: Record<LeaveStatus, string> = {
-  PENDING_TL: "Pending TL",
-  PENDING_MANAGER: "Pending Manager",
-  PENDING_HR: "Pending HR",
-  APPROVED: "Approved",
-  REJECTED: "Rejected",
-};
-
 const STATUS_FILTERS: { value: LeaveFilter | null; label: string }[] = [
   { value: null, label: "All" },
   { value: "PENDING", label: "Pending" },
-  ...Object.values(LeaveStatus).map((status) => ({ value: status, label: STATUS_LABELS[status] })),
+  ...Object.values(LeaveStatus).map((status) => ({ value: status, label: leaveStatusLabels[status] })),
 ];
 
-const statusesFor = (filter: LeaveFilter): LeaveStatus[] => (filter === "PENDING" ? PENDING_STATUSES : [filter]);
-const isPending = (status: LeaveStatus) => PENDING_STATUSES.includes(status);
+const statusesFor = (filter: LeaveFilter): LeaveStatus[] => (filter === "PENDING" ? PENDING_LEAVE_STATUSES : [filter]);
+const isPending = (status: LeaveStatus) => PENDING_LEAVE_STATUSES.includes(status);
 const statusHref = (filter: LeaveFilter | null) => (filter ? `/dashboard/leaves?status=${filter}` : "/dashboard/leaves");
+const REGISTER_HREF = "/dashboard/leaves?view=register";
 
-export default async function LeavesPage({ searchParams }: { searchParams: Promise<{ status?: string }> }) {
-  const requestedStatus = (await searchParams).status?.toUpperCase();
+/** Active employees of the selected company with their leave balances for the current year. */
+async function loadRegister(companyId: string | null) {
+  const [employees, balances, company] = await Promise.all([
+    prisma.employee.findMany({
+      where: workforceScope(companyId),
+      select: { id: true, firstName: true, lastName: true, employeeCode: true, department: { select: { name: true } } },
+      orderBy: [{ firstName: "asc" }, { lastName: "asc" }],
+    }),
+    getLeaveBalances(workforceScope(companyId)),
+    companyId ? prisma.company.findUnique({ where: { id: companyId }, select: { name: true } }) : null,
+  ]);
+  const rows: LeaveRegisterRow[] = employees.map((employee) => {
+    const employeeBalances = balances.balancesFor(employee.id);
+    return {
+      employeeId: employee.id,
+      name: `${employee.firstName} ${employee.lastName}`,
+      code: employee.employeeCode,
+      department: employee.department?.name ?? "Unassigned",
+      balances: employeeBalances,
+      status: balanceStatus(employeeBalances),
+    };
+  });
+  return { rows, year: balances.year, scopeLabel: company?.name ?? (companyId ? "Your company" : "All companies") };
+}
+
+export default async function LeavesPage({ searchParams }: { searchParams: Promise<{ status?: string; view?: string }> }) {
+  const { status, view } = await searchParams;
+  const requestedStatus = status?.toUpperCase();
   const activeFilter = STATUS_FILTERS.find((f) => f.value === requestedStatus) ?? STATUS_FILTERS[0];
   const statusFilter = activeFilter.value;
 
@@ -40,6 +60,8 @@ export default async function LeavesPage({ searchParams }: { searchParams: Promi
   const isApprover = canAccess(user.role, "hr");
   const isLead = isTeamLead(user.role);
   const selfId = user.employeeId ?? "__no-employee__";
+  // The register covers a whole company, so only HR sees it; anyone else asking for it gets the applications board.
+  const showRegister = isApprover && view === "register";
 
   // HR sees the selected company; team leads their own and their direct reports' requests; everyone else their own.
   const leaveScope: Prisma.LeaveRequestWhereInput = isApprover
@@ -52,16 +74,7 @@ export default async function LeavesPage({ searchParams }: { searchParams: Promi
     (status === "PENDING_MANAGER" && user.role === "MANAGER" && employee.manager?.managerId === selfId) ||
     (status === "PENDING_HR" && isApprover);
 
-  const [leaves, statusCounts, employees, leaveTypes] = await Promise.all([
-    prisma.leaveRequest.findMany({
-      where: { ...leaveScope, ...(statusFilter ? { status: { in: statusesFor(statusFilter) } } : {}) },
-      include: {
-        employee: { include: { manager: { select: { managerId: true } } } },
-        leaveType: true,
-      },
-      orderBy: { createdAt: "desc" },
-    }),
-    prisma.leaveRequest.groupBy({ by: ["status"], where: leaveScope, _count: { _all: true } }),
+  const [employees, leaveTypes] = await Promise.all([
     isApprover
       ? prisma.employee.findMany({
           where: employeeScope(activeCompanyId),
@@ -75,8 +88,62 @@ export default async function LeavesPage({ searchParams }: { searchParams: Promi
     prisma.leaveType.findMany({ select: { id: true, name: true, daysAllowed: true } }),
   ]);
 
+  const header = (
+    <>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-bold text-slate-900">Leave Management</h1>
+          <p className="text-xs text-slate-600">Track leave requests, view quotas, and process approvals</p>
+        </div>
+        <ApplyLeaveModal employees={employees} leaveTypes={leaveTypes} />
+      </div>
+      {isApprover && (
+        <nav aria-label="Leave views" className="flex gap-1 border-b border-slate-200">
+          {[
+            { href: "/dashboard/leaves", label: "Leave Applications", active: !showRegister },
+            { href: REGISTER_HREF, label: "Leave Balance Register", active: showRegister },
+          ].map((tab) => (
+            <Link
+              key={tab.href}
+              href={tab.href}
+              aria-current={tab.active ? "page" : undefined}
+              className={clsx(
+                "-mb-px px-3 py-2 border-b-2 text-xs font-semibold transition-colors duration-150",
+                tab.active ? "border-brand-600 text-brand-700" : "border-transparent text-slate-600 hover:text-slate-900 hover:border-slate-300"
+              )}
+            >
+              {tab.label}
+            </Link>
+          ))}
+        </nav>
+      )}
+    </>
+  );
+
+  if (showRegister) {
+    const register = await loadRegister(activeCompanyId);
+    return (
+      <div className="space-y-6">
+        {header}
+        <LeaveBalanceRegister rows={register.rows} year={register.year} scopeLabel={register.scopeLabel} />
+      </div>
+    );
+  }
+
+  const [leaves, statusCounts] = await Promise.all([
+    prisma.leaveRequest.findMany({
+      where: { ...leaveScope, ...(statusFilter ? { status: { in: statusesFor(statusFilter) } } : {}) },
+      include: {
+        employee: { include: { manager: { select: { managerId: true } } } },
+        leaveType: true,
+      },
+      orderBy: { createdAt: "desc" },
+    }),
+    prisma.leaveRequest.groupBy({ by: ["status"], where: leaveScope, _count: { _all: true } }),
+  ]);
+
   const countOf = (status: LeaveStatus) => statusCounts.find((c) => c.status === status)?._count._all ?? 0;
-  const pendingCount = PENDING_STATUSES.reduce((sum, status) => sum + countOf(status), 0);
+  const pendingCount = PENDING_LEAVE_STATUSES.reduce((sum, status) => sum + countOf(status), 0);
   const approvedCount = countOf(LeaveStatus.APPROVED);
   const rejectedCount = countOf(LeaveStatus.REJECTED);
 
@@ -88,13 +155,7 @@ export default async function LeavesPage({ searchParams }: { searchParams: Promi
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-bold text-slate-900">Leave Management</h1>
-          <p className="text-xs text-slate-600">Track leave requests, view quotas, and process approvals</p>
-        </div>
-        <ApplyLeaveModal employees={employees} leaveTypes={leaveTypes} />
-      </div>
+      {header}
 
       {/* Metric Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -180,14 +241,8 @@ export default async function LeavesPage({ searchParams }: { searchParams: Promi
                     </td>
                     <td className="py-3 px-4 text-slate-600 max-w-xs truncate">{leave.reason}</td>
                     <td className="py-3 px-4">
-                      <span className={`px-2 py-0.5 rounded-full text-[11px] font-semibold ${
-                        leave.status === LeaveStatus.APPROVED
-                          ? "bg-emerald-50 text-emerald-700"
-                          : leave.status === LeaveStatus.REJECTED
-                          ? "bg-rose-50 text-rose-700"
-                          : "bg-amber-50 text-amber-700"
-                      }`}>
-                        {STATUS_LABELS[leave.status]}
+                      <span className={clsx("px-2 py-0.5 rounded-full text-[11px] font-semibold", leaveStatusBadgeClass(leave.status))}>
+                        {leaveStatusLabels[leave.status]}
                       </span>
                     </td>
                     <td className="py-3 px-4 text-right">

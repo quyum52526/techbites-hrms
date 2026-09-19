@@ -15,6 +15,9 @@ import EmployeeAvatar from "@/components/dashboard/EmployeeAvatar";
 import ReleaseCalculator from "@/components/dashboard/ReleaseCalculator";
 import { cardClass, secondaryButtonClass } from "@/components/ui/styles";
 import { getAccessibleCompanyIds } from "@/lib/company";
+import { getLeaveBalances } from "@/lib/leave-balance";
+import { balanceStatus, balanceStatusBadgeClass, balanceStatusLabels } from "@/lib/leave-shared";
+import LeaveHistoryModal from "@/components/dashboard/LeaveHistoryModal";
 
 const formatDate = (date: Date) =>
   date.toLocaleDateString("en-GB", { timeZone: "Asia/Dhaka", day: "numeric", month: "short", year: "numeric" });
@@ -83,15 +86,18 @@ export default async function EmployeeProfilePage({
   const separated = isSeparated(employee.status);
   const profileHref = `/dashboard/employees/${employee.id}`;
 
-  const [editing, formOptions, processedBy] = await Promise.all([
+  const [editing, formOptions, processedBy, leaveBalances] = await Promise.all([
     isAdmin && edit ? loadEditableEmployee(employee.id) : null,
     isAdmin && edit ? loadEmployeeFormOptions() : null,
     settlement?.processedById
       ? prisma.user.findUnique({ where: { id: settlement.processedById }, select: { email: true } })
       : null,
+    getLeaveBalances({ id: employee.id }),
   ]);
 
   const fullName = `${employee.firstName} ${employee.lastName}`;
+  const balances = leaveBalances.balancesFor(employee.id);
+  const leaveStatus = balanceStatus(balances);
   const nidIsPdf = employee.nidScanUrl ? /\.pdf($|[?#])/i.test(employee.nidScanUrl) : false;
 
   return (
@@ -185,6 +191,55 @@ export default async function EmployeeProfilePage({
           />
         </Panel>
       </div>
+
+      <section aria-labelledby="leave-balance-title" className={clsx(cardClass, "p-5")}>
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <h2 id="leave-balance-title" className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+              Leave balance · {leaveBalances.year}
+            </h2>
+            <span className={clsx("px-2 py-0.5 rounded-full text-[11px] font-semibold", balanceStatusBadgeClass[leaveStatus])}>
+              {balanceStatusLabels[leaveStatus]}
+            </span>
+          </div>
+          <LeaveHistoryModal employeeId={employee.id} employeeName={fullName} />
+        </div>
+        {balances.length === 0 ? (
+          <p className="text-xs text-slate-500">No leave types are configured.</p>
+        ) : (
+          <ul className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 text-xs">
+            {balances.map((balance) => {
+              const usedShare = balance.quota > 0 ? Math.min(balance.used / balance.quota, 1) : 0;
+              return (
+                <li key={balance.leaveTypeId} className="rounded-lg border border-slate-200 p-3 space-y-2">
+                  <div className="flex items-baseline justify-between gap-2">
+                    <span className="font-semibold text-slate-900">{balance.name}</span>
+                    <span className="tabular-nums text-slate-600">
+                      {balance.used} / {balance.quota} days used
+                    </span>
+                  </div>
+                  <div
+                    role="meter"
+                    aria-label={`${balance.name} leave used`}
+                    aria-valuemin={0}
+                    aria-valuemax={balance.quota}
+                    aria-valuenow={Math.min(balance.used, balance.quota)}
+                    className="h-1.5 rounded-full bg-slate-100 overflow-hidden"
+                  >
+                    <div
+                      className={clsx("h-full rounded-full", balance.remaining <= 0 ? "bg-rose-600" : usedShare >= 0.8 ? "bg-amber-500" : "bg-emerald-600")}
+                      style={{ width: `${usedShare * 100}%` }}
+                    />
+                  </div>
+                  <p className={clsx("font-semibold tabular-nums", balance.remaining <= 0 ? "text-rose-700" : "text-emerald-700")}>
+                    {balance.remaining} {Math.abs(balance.remaining) === 1 ? "day" : "days"} remaining
+                  </p>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </section>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Panel title="NID scan">

@@ -3,8 +3,51 @@
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { LeaveStatus, Role } from "@prisma/client";
-import { canAccess, getActiveUser, isTeamLead } from "@/lib/auth";
-import { employeeScope, getActiveCompanyId } from "@/lib/company";
+import { canAccess, getActiveUser, isHRAdmin, isTeamLead } from "@/lib/auth";
+import { employeeScope, getAccessibleCompanyIds, getActiveCompanyId } from "@/lib/company";
+import { leaveDays } from "@/lib/leave-balance";
+import type { LeaveHistoryEntry } from "@/lib/leave-shared";
+
+const isoDate = (date: Date) => date.toISOString().slice(0, 10);
+
+/**
+ * Every leave request of one employee, newest first. Employees may read their own history; HR admins any
+ * employee in the companies they can access (the same rule as the employee profile page).
+ */
+export async function getEmployeeLeaveHistory(employeeId: string): Promise<LeaveHistoryEntry[]> {
+  const user = await getActiveUser();
+  if (user.employeeId !== employeeId) {
+    if (!isHRAdmin(user.role)) throw new Error("You can only view your own leave history");
+    const employee = await prisma.employee.findUnique({ where: { id: employeeId }, select: { companyId: true } });
+    const accessibleIds = await getAccessibleCompanyIds(user);
+    if (!employee || (accessibleIds && !(employee.companyId && accessibleIds.includes(employee.companyId)))) {
+      throw new Error("Employee not found");
+    }
+  }
+
+  const requests = await prisma.leaveRequest.findMany({
+    where: { employeeId },
+    include: { leaveType: { select: { name: true } } },
+    orderBy: { startDate: "desc" },
+  });
+  const actorIds = [...new Set(requests.flatMap((request) => (request.approvedBy ? [request.approvedBy] : [])))];
+  const actors = actorIds.length
+    ? await prisma.user.findMany({ where: { id: { in: actorIds } }, select: { id: true, email: true } })
+    : [];
+  const actorEmail = new Map(actors.map((actor) => [actor.id, actor.email]));
+
+  return requests.map((request) => ({
+    id: request.id,
+    leaveType: request.leaveType.name,
+    startDate: isoDate(request.startDate),
+    endDate: isoDate(request.endDate),
+    days: leaveDays(request.startDate, request.endDate),
+    reason: request.reason,
+    status: request.status,
+    appliedOn: isoDate(request.createdAt),
+    lastActionBy: request.approvedBy ? (actorEmail.get(request.approvedBy) ?? "Deleted user") : null,
+  }));
+}
 
 export async function submitLeaveRequest(formData: FormData) {
   const requestedEmployeeId = formData.get("employeeId") as string | null;

@@ -1,10 +1,11 @@
 "use server";
 
-import { AppraisalStatus, Role } from "@prisma/client";
+import { AppraisalStatus, Prisma, Role } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { getActiveUser, isTeamLead } from "@/lib/auth";
 import { PERFORMANCE_ROLES } from "@/lib/auth-shared";
+import { employeeScope, getActiveCompanyId } from "@/lib/company";
 
 const privilegedRoles: Role[] = [Role.SUPER_ADMIN, Role.HR_ADMIN];
 
@@ -45,18 +46,19 @@ export async function createAppraisalCycle(data: {
 /**
  * Reviews in a cycle. Team leads always get their own direct reports: this is a server action the browser can call
  * with any arguments, so `managerEmployeeId` is honoured only for HR admins (to view one manager's team).
+ * HR admins see the company picked in the TopNav switcher, or their own company when they cannot switch.
  */
 export async function getReviewsForCycle(cycleId: string, managerEmployeeId?: string) {
   const user = await requirePerformanceAccess();
   const cycle = await prisma.appraisalCycle.findUnique({ where: { id: cycleId } });
   if (!cycle) throw new Error("Appraisal cycle not found");
 
-  let employeeFilter = {};
+  let employeeFilter: Prisma.EmployeeWhereInput;
   if (isTeamLead(user.role)) {
     if (!user.employeeId) throw new Error("Team leader profile is not linked to an employee");
     employeeFilter = { managerId: user.employeeId };
-  } else if (managerEmployeeId) {
-    employeeFilter = { managerId: managerEmployeeId };
+  } else {
+    employeeFilter = { ...employeeScope(await getActiveCompanyId()), ...(managerEmployeeId ? { managerId: managerEmployeeId } : {}) };
   }
 
   const employees = await prisma.employee.findMany({
@@ -83,12 +85,15 @@ export async function submitPerformanceReview(
   const user = await requirePerformanceAccess();
   const [cycle, employee] = await Promise.all([
     prisma.appraisalCycle.findUnique({ where: { id: cycleId } }),
-    prisma.employee.findUnique({ where: { id: employeeId }, select: { id: true, managerId: true } }),
+    prisma.employee.findUnique({ where: { id: employeeId }, select: { id: true, managerId: true, companyId: true } }),
   ]);
   if (!cycle) throw new Error("Appraisal cycle not found");
   if (!employee) throw new Error("Employee not found");
-  if (isTeamLead(user.role) && employee.managerId !== user.employeeId) {
-    throw new Error("You can only review direct reports");
+  if (isTeamLead(user.role)) {
+    if (employee.managerId !== user.employeeId) throw new Error("You can only review direct reports");
+  } else {
+    const activeCompanyId = await getActiveCompanyId();
+    if (activeCompanyId && employee.companyId !== activeCompanyId) throw new Error("This employee is outside the selected company");
   }
   if (![metrics.productivity, metrics.qualityOfWork, metrics.collaboration].every((score) => Number.isInteger(score) && score >= 1 && score <= 5)) {
     throw new Error("Each rating must be an integer from 1 to 5");
