@@ -4,8 +4,9 @@ import { prisma } from "@/lib/prisma";
 import { getActiveUser } from "@/lib/auth";
 
 export const ACTIVE_COMPANY_COOKIE = "techbites-active-company";
+export const NO_COMPANY_SCOPE = "__no-company__";
 
-const companySwitcherRoles: Role[] = [Role.SUPER_ADMIN, Role.HR_ADMIN];
+const companySwitcherRoles: Role[] = [Role.SUPER_ADMIN];
 
 /**
  * Returns the company selected in the TopNav switcher, or null for "All Companies".
@@ -13,12 +14,12 @@ const companySwitcherRoles: Role[] = [Role.SUPER_ADMIN, Role.HR_ADMIN];
  * never silently scopes another user's view.
  */
 export async function getActiveCompanyId(): Promise<string | null> {
+  const user = await getActiveUser();
+  if (user.role !== Role.SUPER_ADMIN) return user.companyId ?? NO_COMPANY_SCOPE;
+
   const cookieStore = await cookies();
   const companyId = cookieStore.get(ACTIVE_COMPANY_COOKIE)?.value;
   if (!companyId) return null;
-
-  const user = await getActiveUser();
-  if (!companySwitcherRoles.includes(user.role)) return null;
 
   const company = await prisma.company.findUnique({ where: { id: companyId }, select: { id: true } });
   return company?.id ?? null;

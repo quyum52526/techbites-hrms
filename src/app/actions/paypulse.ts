@@ -20,8 +20,8 @@ export async function processPayPulsePunches(): Promise<{ processed: number; sum
   const user = await getActiveUser();
   if (user.role !== Role.SUPER_ADMIN && user.role !== Role.HR_ADMIN) throw new Error("You do not have permission to process attendance logs");
 
-  const logs = await prisma.rawAttendanceLog.findMany({ where: { processed: false }, orderBy: { punch_timestamp: "asc" } });
-  const employees = await prisma.employee.findMany({ where: { biometricId: { in: [...new Set(logs.map((log) => log.device_user_id))] } }, select: { id: true, biometricId: true } });
+  const logs = await prisma.rawAttendanceLog.findMany({ where: { processed: false, ...(user.role === "SUPER_ADMIN" ? {} : { company_id: user.companyId ?? "__no-company__" }) }, orderBy: { punch_timestamp: "asc" } });
+  const employees = await prisma.employee.findMany({ where: { companyId: user.role === "SUPER_ADMIN" ? undefined : user.companyId ?? "__no-company__", biometricId: { in: [...new Set(logs.map((log) => log.device_user_id))] } }, select: { id: true, biometricId: true } });
   const employeeByBiometric = new Map(employees.map((employee) => [employee.biometricId, employee.id]));
   const groups = new Map<string, { employeeId: string; date: Date; punches: Date[]; logIds: string[] }>();
   const unmapped = new Set<string>();

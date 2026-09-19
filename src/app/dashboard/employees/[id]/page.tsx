@@ -62,7 +62,7 @@ export default async function EmployeeProfilePage({
   // HR admins see every profile; anyone else only their own, read-only.
   if (!isAdmin && user.employeeId !== id) notFound();
 
-  const employee = await prisma.employee.findUnique({
+  const employee = await prisma.employee.findFirst({
     where: { id },
     include: {
       user: { select: { email: true } },
@@ -75,6 +75,7 @@ export default async function EmployeeProfilePage({
     },
   });
   if (!employee) notFound();
+  if (user.role !== "SUPER_ADMIN" && employee.companyId !== user.companyId) notFound();
 
   const settlement = employee.settlements[0] ?? null;
   const separated = isSeparated(employee.status);

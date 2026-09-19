@@ -11,6 +11,7 @@ export type ActiveUser = {
   email: string;
   role: Role;
   employeeId: string | null;
+  companyId: string | null;
   /** Employee name, or null for a login without an employee record. */
   name: string | null;
 };
@@ -28,7 +29,7 @@ export const readSession = cache(async (): Promise<{ user: ActiveUser } | { prob
 
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { id: true, email: true, role: true, isActive: true, employee: { select: { id: true, firstName: true, lastName: true } } },
+    select: { id: true, email: true, role: true, isActive: true, employee: { select: { id: true, companyId: true, firstName: true, lastName: true } } },
   });
   if (!user) return { problem: "expired" };
   if (!user.isActive) return { problem: "deactivated" };
@@ -39,6 +40,7 @@ export const readSession = cache(async (): Promise<{ user: ActiveUser } | { prob
       email: user.email,
       role: user.role,
       employeeId: user.employee?.id ?? null,
+      companyId: user.employee?.companyId ?? null,
       name: user.employee ? `${user.employee.firstName} ${user.employee.lastName}` : null,
     },
   };

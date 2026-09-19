@@ -1,286 +1,31 @@
+import { EmployeeStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import type { Prisma } from "@prisma/client";
-import { Banknote, CheckCircle2, Clock3, DollarSign, Users } from "lucide-react";
-import { getActiveUser } from "@/lib/auth";
 import { getActiveCompanyId, employeeScope } from "@/lib/company";
-import { orgToday } from "@/lib/attendance-time";
-import { formatMoney, parsePeriodParam, periodLabel as toPeriodLabel } from "@/lib/payroll";
-import CompanyLogo from "@/components/dashboard/CompanyLogo";
-import PayslipModal, { type PayslipData } from "@/components/dashboard/PayslipModal";
-import { PayrollControls, PayrollStatusSelect } from "@/components/dashboard/PayrollControls";
-import SalaryStructureForm from "@/components/dashboard/SalaryStructureForm";
+import PayPulsePayrollTable from "@/components/dashboard/PayPulsePayrollTable";
 
-export default async function PayrollPage({ searchParams }: { searchParams: Promise<{ period?: string }> }) {
-  const today = orgToday();
-  const period = parsePeriodParam((await searchParams).period) ?? { month: today.getUTCMonth() + 1, year: today.getUTCFullYear() };
-  const label = toPeriodLabel(period);
+export const dynamic = "force-dynamic";
 
-  const [user, activeCompanyId] = await Promise.all([getActiveUser(), getActiveCompanyId()]);
-  const canManage = user.role === "SUPER_ADMIN" || user.role === "HR_ADMIN";
-
-  // Admins see the selected company (or everyone); other roles only ever see their own pay-slips.
-  const recordWhere: Prisma.PayrollRecordWhereInput = !canManage
-    ? { month: label, employeeId: user.employeeId ?? "__none__" }
-    : activeCompanyId
-      ? // Pay-slips generated before companies existed have no companyId, so fall back to the employee's company.
-        { month: label, OR: [{ companyId: activeCompanyId }, { companyId: null, employee: { companyId: activeCompanyId } }] }
-      : { month: label };
-
-  const [payrollRecords, employees, activeCompany] = await Promise.all([
-    prisma.payrollRecord.findMany({
-      where: recordWhere,
-      include: {
-        company: true,
-        employee: { include: { company: true, department: true, designation: true } },
-      },
-      orderBy: [{ employee: { firstName: "asc" } }, { employee: { lastName: "asc" } }],
-    }),
-    canManage
-      ? prisma.employee.findMany({
-          where: employeeScope(activeCompanyId),
-          include: { salaryStructure: true },
-          orderBy: [{ firstName: "asc" }, { lastName: "asc" }],
-        })
-      : Promise.resolve([]),
-    activeCompanyId ? prisma.company.findUnique({ where: { id: activeCompanyId }, select: { name: true } }) : null,
-  ]);
-
-  const paidRecords = payrollRecords.filter((r) => r.status === "PAID");
-  const pendingRecords = payrollRecords.filter((r) => r.status !== "PAID");
-  const sum = (records: typeof payrollRecords) => records.reduce((acc, r) => acc + r.netSalary, 0);
-  const configuredCount = employees.filter((e) => e.salaryStructure).length;
-
-  const cards = [
-    { label: `Total Payroll · ${label}`, value: formatMoney(sum(payrollRecords)), sub: `${payrollRecords.length} pay-slip(s)`, icon: Banknote, color: "text-brand-700 bg-brand-50" },
-    { label: "Disbursed (Paid)", value: formatMoney(sum(paidRecords)), sub: `${paidRecords.length} paid`, icon: CheckCircle2, color: "text-emerald-700 bg-emerald-50" },
-    { label: "Pending Disbursement", value: formatMoney(sum(pendingRecords)), sub: `${pendingRecords.length} not yet paid`, icon: Clock3, color: "text-amber-700 bg-amber-50" },
-    ...(canManage
-      ? [{ label: "Salary Configured", value: `${configuredCount} / ${employees.length}`, sub: "employees in scope", icon: Users, color: "text-brand-700 bg-brand-50" }]
-      : []),
-  ];
-
-  const toPayslip = (record: (typeof payrollRecords)[number]): PayslipData => {
-    const company = record.company ?? record.employee.company;
-    return {
-      recordId: record.id,
-      periodLabel: record.month,
-      status: record.status,
-      paymentDate: record.paymentDate?.toISOString() ?? null,
-      generatedAt: record.updatedAt.toISOString(),
-      company: company
-        ? { name: company.name, logoUrl: company.logoUrl, address: company.address, binNumber: company.binNumber, phone: company.phone, email: company.email }
-        : null,
-      employee: {
-        name: `${record.employee.firstName} ${record.employee.lastName}`,
-        employeeCode: record.employee.employeeCode,
-        biometricId: record.employee.biometricId,
-        designation: record.employee.designation?.title ?? null,
-        department: record.employee.department?.name ?? null,
-      },
-      basicSalary: record.basicSalary,
-      houseRent: record.houseRent,
-      medicalAllow: record.medicalAllow,
-      allowances: record.allowances,
-      taxDeduction: record.taxDeduction,
-      providentFund: record.providentFund,
-      attendanceDeduction: record.attendanceDeduction,
-      lateDays: record.lateDays,
-      absentDays: record.absentDays,
-      deductions: record.deductions,
-      netSalary: record.netSalary,
-    };
-  };
-
-  return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h2 className="text-xl font-bold text-slate-900">Payroll Management</h2>
-          <p className="text-xs text-slate-600">
-            {canManage
-              ? `Generate monthly payroll, track disbursement and issue branded pay-slips · ${activeCompany?.name ?? "All Companies"}`
-              : "Your monthly pay-slips"}
-          </p>
-        </div>
-        {canManage && (
-          <PayrollControls
-            period={period}
-            periodLabel={label}
-            activeCompanyId={activeCompanyId}
-            scopeLabel={activeCompany?.name ?? "all companies"}
-            hasRecords={payrollRecords.length > 0}
-          />
-        )}
-      </div>
-
-      <div className={`grid grid-cols-1 sm:grid-cols-2 ${canManage ? "lg:grid-cols-4" : "lg:grid-cols-3"} gap-4`}>
-        {cards.map((card) => {
-          const Icon = card.icon;
-          return (
-            <div key={card.label} className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between gap-3">
-              <div className="min-w-0">
-                <p className="text-xs font-semibold text-slate-600 truncate">{card.label}</p>
-                <p className="text-xl font-bold text-slate-900 mt-1 tabular-nums">{card.value}</p>
-                <p className="text-[11px] text-slate-500 mt-0.5">{card.sub}</p>
-              </div>
-              <div className={`p-3 rounded-xl shrink-0 ${card.color}`}>
-                <Icon className="w-5 h-5" />
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Payroll records for the period */}
-      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-        <div className="p-4 border-b border-slate-100 flex items-center justify-between">
-          <h3 className="text-sm font-bold text-slate-900">Payroll Register · {label}</h3>
-          <span className="text-xs font-semibold text-slate-700 bg-slate-100 px-2 py-0.5 rounded-full">{payrollRecords.length} records</span>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
-            <thead className="bg-slate-50 text-slate-700 border-b border-slate-200">
-              <tr>
-                <th className="py-3 px-4 font-semibold">Employee</th>
-                <th className="py-3 px-4 font-semibold">Company</th>
-                <th className="py-3 px-4 font-semibold text-right">Gross</th>
-                <th className="py-3 px-4 font-semibold text-right">Deductions</th>
-                <th className="py-3 px-4 font-semibold text-right">Net Pay</th>
-                <th className="py-3 px-4 font-semibold">Status</th>
-                <th className="py-3 px-4 font-semibold text-right">Pay-slip</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {payrollRecords.length === 0 ? (
-                <tr>
-                  <td colSpan={7} className="py-10 text-center text-slate-600">
-                    {canManage
-                      ? `No payroll generated for ${label} yet. Use "Generate Payroll" above.`
-                      : `No pay-slip issued for ${label}.`}
-                  </td>
-                </tr>
-              ) : (
-                payrollRecords.map((record) => {
-                  const company = record.company ?? record.employee.company;
-                  return (
-                    <tr key={record.id} className="hover:bg-slate-50/60">
-                      <td className="py-3 px-4">
-                        <p className="font-semibold text-slate-900">
-                          {record.employee.firstName} {record.employee.lastName}
-                        </p>
-                        <p className="text-[11px] text-slate-600 font-mono">
-                          {record.employee.employeeCode}
-                          {record.employee.department ? ` · ${record.employee.department.name}` : ""}
-                        </p>
-                      </td>
-                      <td className="py-3 px-4">
-                        {company ? (
-                          <div className="flex items-center gap-2">
-                            <CompanyLogo name={company.name} logoUrl={company.logoUrl} className="w-6 h-6" />
-                            <span className="font-mono text-[11px] font-semibold text-slate-800">{company.code}</span>
-                          </div>
-                        ) : (
-                          <span className="text-slate-500">—</span>
-                        )}
-                      </td>
-                      <td className="py-3 px-4 text-right font-mono tabular-nums text-slate-900">
-                        {formatMoney(record.basicSalary + record.allowances)}
-                      </td>
-                      <td className="py-3 px-4 text-right font-mono tabular-nums text-rose-700">
-                        {record.deductions > 0 ? `−${formatMoney(record.deductions)}` : formatMoney(0)}
-                        {(record.lateDays > 0 || record.absentDays > 0) && (
-                          <p className="text-[11px] text-slate-600 font-sans">
-                            {record.absentDays} absent · {record.lateDays} late
-                          </p>
-                        )}
-                      </td>
-                      <td className="py-3 px-4 text-right font-mono tabular-nums font-bold text-slate-900">{formatMoney(record.netSalary)}</td>
-                      <td className="py-3 px-4">
-                        {canManage ? (
-                          <PayrollStatusSelect
-                            recordId={record.id}
-                            status={record.status}
-                            employeeName={`${record.employee.firstName} ${record.employee.lastName}`}
-                          />
-                        ) : (
-                          <span className="text-[11px] font-bold text-slate-900">{record.status}</span>
-                        )}
-                      </td>
-                      <td className="py-3 px-4 text-right">
-                        <PayslipModal payslip={toPayslip(record)} />
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {canManage && (
-        <>
-          {/* Salary structures */}
-          <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-            <div className="p-4 border-b border-slate-100">
-              <h3 className="text-sm font-bold text-slate-900">Salary Structures</h3>
-              <p className="text-[11px] text-slate-600">Monthly figures used when payroll is generated. Late/absent fines are applied at generation time.</p>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead className="bg-slate-50 text-slate-700 border-b border-slate-200">
-                  <tr>
-                    <th className="py-3 px-4 font-semibold">Employee</th>
-                    <th className="py-3 px-4 font-semibold text-right">Basic</th>
-                    <th className="py-3 px-4 font-semibold text-right">House Rent</th>
-                    <th className="py-3 px-4 font-semibold text-right">Medical</th>
-                    <th className="py-3 px-4 font-semibold text-right">Other</th>
-                    <th className="py-3 px-4 font-semibold text-right">Tax</th>
-                    <th className="py-3 px-4 font-semibold text-right">PF</th>
-                    <th className="py-3 px-4 font-semibold text-right">Net (before fines)</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {employees.map((emp) => {
-                    const s = emp.salaryStructure;
-                    return (
-                      <tr key={emp.id} className="hover:bg-slate-50/60">
-                        <td className="py-2.5 px-4">
-                          <p className="font-semibold text-slate-900">{emp.firstName} {emp.lastName}</p>
-                          <p className="text-[11px] text-slate-600 font-mono">{emp.employeeCode}</p>
-                        </td>
-                        {s ? (
-                          <>
-                            {[s.basicSalary, s.houseRent, s.medicalAllow, s.otherAllow, s.taxDeduction, s.providentFund].map((value, i) => (
-                              <td key={i} className="py-2.5 px-4 text-right font-mono tabular-nums text-slate-900">{formatMoney(value)}</td>
-                            ))}
-                            <td className="py-2.5 px-4 text-right font-mono tabular-nums font-bold text-slate-900">
-                              {formatMoney(s.basicSalary + s.houseRent + s.medicalAllow + s.otherAllow - s.taxDeduction - s.providentFund)}
-                            </td>
-                          </>
-                        ) : (
-                          <td colSpan={7} className="py-2.5 px-4 text-right text-[11px] font-semibold text-amber-800">
-                            Not configured — excluded from payroll
-                          </td>
-                        )}
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
-            <h3 className="text-sm font-bold text-slate-900 mb-3 flex items-center gap-2">
-              <DollarSign className="w-4 h-4 text-brand-600" aria-hidden /> Set Employee Salary Structure (monthly, ৳)
-            </h3>
-            <SalaryStructureForm
-              employees={employees.map((e) => ({ id: e.id, name: `${e.firstName} ${e.lastName}`, employeeCode: e.employeeCode }))}
-            />
-          </div>
-        </>
-      )}
-    </div>
-  );
+export default async function PayrollPage() {
+  const today = new Date();
+  const month = today.toLocaleDateString("en-CA", { timeZone: "Asia/Dhaka" }).slice(0, 7);
+  const year = today.getUTCFullYear();
+  const monthNumber = today.getUTCMonth();
+  const start = new Date(Date.UTC(year, monthNumber, 1));
+  const end = new Date(Date.UTC(year, monthNumber + 1, 0, 23, 59, 59));
+  const companyId = await getActiveCompanyId();
+  const employees = await prisma.employee.findMany({
+    where: { ...employeeScope(companyId), status: { in: [EmployeeStatus.ACTIVE, EmployeeStatus.PROBATION, EmployeeStatus.NOTICE_PERIOD] } },
+    include: { department: true, salaryStructure: true, attendances: { where: { date: { gte: start, lte: end } }, select: { checkIn: true, checkOut: true, status: true } } },
+    orderBy: { employeeCode: "asc" },
+  });
+  const rows = employees.map((employee) => {
+    const salary = employee.salaryStructure;
+    const loggedHours = employee.attendances.reduce((total, attendance) => total + (attendance.checkIn && attendance.checkOut ? Math.max(0, attendance.checkOut.getTime() - attendance.checkIn.getTime()) / 3_600_000 : 0), 0);
+    const absentDays = employee.attendances.filter((attendance) => attendance.status === "ABSENT").length;
+    const allowances = (salary?.houseRent ?? 0) + (salary?.medicalAllow ?? 0) + (salary?.otherAllow ?? 0);
+    const deductions = (salary?.taxDeduction ?? 0) + (salary?.providentFund ?? 0) + (salary?.basicSalary ?? 0) / 30 * absentDays;
+    const gross = (salary?.basicSalary ?? 0) + allowances;
+    return { employeeId: employee.id, code: employee.employeeCode, name: `${employee.firstName} ${employee.lastName}`, department: employee.department?.name ?? "Unassigned", payModel: employee.employmentType === "PART_TIME" ? "HOURLY" as const : "MONTHLY" as const, loggedValue: employee.employmentType === "PART_TIME" ? Number(loggedHours.toFixed(2)) : employee.attendances.filter((attendance) => attendance.checkIn).length, loggedUnit: employee.employmentType === "PART_TIME" ? "hrs" : "days", gross, deductions, net: Math.max(0, gross - deductions), status: "PENDING" as const };
+  });
+  return <div className="space-y-6"><div><h1 className="text-xl font-bold text-slate-900">Payroll</h1><p className="text-xs text-slate-600">PayPulse payroll register with logged metrics and pending approvals · {month}</p></div><PayPulsePayrollTable rows={rows} departments={[...new Set(rows.map((row) => row.department))].sort()} month={month} /></div>;
 }

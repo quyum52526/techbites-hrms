@@ -28,12 +28,13 @@ const MAX_REPORTING_DEPTH = 50;
  * Checks a "Reports to" choice. The manager must be on the workforce (unless unchanged), cannot be the employee,
  * and cannot be someone who already reports up to the employee, which would make a reporting loop.
  */
-async function validateManager(managerId: string | null, employeeId: string | null, currentManagerId: string | null = null) {
+async function validateManager(managerId: string | null, employeeId: string | null, currentManagerId: string | null = null, companyId: string | null = null) {
   if (!managerId) return null;
   if (managerId === employeeId) return "An employee cannot report to themselves";
 
-  const manager = await prisma.employee.findUnique({ where: { id: managerId }, select: { status: true, managerId: true } });
+  const manager = await prisma.employee.findUnique({ where: { id: managerId }, select: { status: true, managerId: true, companyId: true } });
   if (!manager) return "Selected manager no longer exists";
+  if (companyId && manager.companyId !== companyId) return "Selected manager belongs to a different company";
   if (managerId !== currentManagerId && !WORKFORCE_STATUSES.includes(manager.status)) {
     return "Selected manager is no longer on the workforce";
   }
@@ -62,7 +63,7 @@ export async function createEmployee(formData: FormData): Promise<EmployeeAction
   const lastName = (formData.get("lastName") as string)?.trim();
   const employeeCode = (formData.get("employeeCode") as string)?.trim();
   const phone = formData.get("phone") as string;
-  const companyId = (formData.get("companyId") as string) || null;
+  let companyId = (formData.get("companyId") as string) || null;
   const biometricId = (formData.get("biometricId") as string)?.trim() || null;
   const departmentId = (formData.get("departmentId") as string) || null;
   const designationId = formData.get("designationId") as string;
@@ -78,7 +79,12 @@ export async function createEmployee(formData: FormData): Promise<EmployeeAction
     return { ok: false, error: `You cannot grant the ${roleLabels[role]} role` };
   }
   const managerId = (formData.get("managerId") as string | null) || null;
-  const managerError = await validateManager(managerId, null);
+  if (user.role !== Role.SUPER_ADMIN) {
+    if (!user.companyId) return { ok: false, error: "Your account is not assigned to a company" };
+    if (companyId && companyId !== user.companyId) return { ok: false, error: "You cannot create an employee in another company" };
+    companyId = user.companyId;
+  }
+  const managerError = await validateManager(managerId, null, null, companyId);
   if (managerError) return { ok: false, error: managerError };
 
   const images = await readEmployeeImages(formData);
@@ -337,9 +343,13 @@ export async function updateEmployee(employeeId: string, formData: FormData): Pr
 
   const existing = await prisma.employee.findUnique({
     where: { id: employeeId },
-    select: { status: true, userId: true, managerId: true, photoUrl: true, nidScanUrl: true, user: { select: { role: true } } },
+    select: { status: true, userId: true, managerId: true, companyId: true, photoUrl: true, nidScanUrl: true, user: { select: { role: true } } },
   });
   if (!existing) return { ok: false, error: "This employee no longer exists" };
+  if (user.role !== Role.SUPER_ADMIN && !user.companyId) return { ok: false, error: "Your account is not assigned to a company" };
+  if (user.role !== Role.SUPER_ADMIN && existing.companyId !== user.companyId) {
+    return { ok: false, error: "You cannot edit an employee from another company" };
+  }
 
   const firstName = textField(formData, "firstName");
   const lastName = textField(formData, "lastName");
@@ -390,20 +400,25 @@ export async function updateEmployee(employeeId: string, formData: FormData): Pr
   }
 
   const managerId = textField(formData, "managerId");
-  const managerError = await validateManager(managerId, employeeId, existing.managerId);
+  if (user.role !== Role.SUPER_ADMIN) {
+    if (!user.companyId) return { ok: false, error: "Your account is not assigned to a company" };
+    if (companyId && companyId !== user.companyId) return { ok: false, error: "You cannot move an employee to another company" };
+  }
+  const effectiveCompanyId = user.role === Role.SUPER_ADMIN ? companyId : user.companyId;
+  const managerError = await validateManager(managerId, employeeId, existing.managerId, effectiveCompanyId);
   if (managerError) return { ok: false, error: managerError };
 
   const images = await readEmployeeImages(formData);
   if (!images.ok) return images;
 
-  if (companyId) {
-    const company = await prisma.company.findUnique({ where: { id: companyId }, select: { id: true } });
+  if (effectiveCompanyId) {
+    const company = await prisma.company.findUnique({ where: { id: effectiveCompanyId }, select: { id: true } });
     if (!company) return { ok: false, error: "Selected company no longer exists" };
   }
   if (departmentId) {
     const department = await prisma.department.findUnique({ where: { id: departmentId }, select: { companyId: true } });
     if (!department) return { ok: false, error: "Selected department no longer exists" };
-    if (department.companyId && department.companyId !== companyId) {
+    if (department.companyId && department.companyId !== effectiveCompanyId) {
       return { ok: false, error: "Selected department belongs to a different company" };
     }
   }
@@ -419,7 +434,7 @@ export async function updateEmployee(employeeId: string, formData: FormData): Pr
           lastName,
           employeeCode,
           biometricId: textField(formData, "biometricId"),
-          companyId,
+          companyId: effectiveCompanyId,
           departmentId,
           designationId,
           phone: textField(formData, "phone"),
@@ -469,8 +484,10 @@ export async function releaseEmployee(employeeId: string, input: ReleaseInput): 
   }
   if (user.employeeId === employeeId) return { ok: false, error: "You cannot process your own release" };
 
-  const employee = await prisma.employee.findUnique({ where: { id: employeeId }, select: { status: true, joiningDate: true } });
+  const employee = await prisma.employee.findUnique({ where: { id: employeeId }, select: { status: true, joiningDate: true, companyId: true } });
   if (!employee) return { ok: false, error: "This employee no longer exists" };
+  if (user.role !== Role.SUPER_ADMIN && !user.companyId) return { ok: false, error: "Your account is not assigned to a company" };
+  if (user.role !== Role.SUPER_ADMIN && employee.companyId !== user.companyId) return { ok: false, error: "You cannot release an employee from another company" };
   if (isSeparated(employee.status)) return { ok: false, error: "This employee has already been released" };
 
   if (input.separationType !== "TERMINATED" && input.separationType !== "RESIGNED") {

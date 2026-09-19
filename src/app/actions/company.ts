@@ -20,9 +20,18 @@ async function requireCompanyAccess() {
   return user;
 }
 
+async function requireCompanyMutationAccess(companyId?: string) {
+  const user = await requireCompanyAccess();
+  if (user.role !== Role.SUPER_ADMIN && companyId && user.companyId !== companyId) {
+    throw new Error("You do not have access to this company");
+  }
+  return user;
+}
+
 export async function getCompanies() {
-  await requireCompanyAccess();
+  const user = await requireCompanyAccess();
   const companies = await prisma.company.findMany({
+    where: user.role === Role.SUPER_ADMIN ? undefined : { id: user.companyId ?? "__no-company__" },
     orderBy: [{ isParent: "desc" }, { name: "asc" }],
     include: { _count: { select: { employees: true, departments: true } } },
   });
@@ -111,7 +120,8 @@ function duplicateCodeResult(err: unknown, code: string): CompanyActionResult {
 }
 
 export async function createCompany(input: CompanyInput | FormData): Promise<CompanyActionResult> {
-  await requireCompanyAccess();
+  const user = await requireCompanyAccess();
+  if (user.role !== Role.SUPER_ADMIN) throw new Error("Only a Super Admin can create companies");
 
   const parsed = parseCompanyInput(input instanceof FormData ? companyInputFromFormData(input) : input);
   if (!parsed.ok) return parsed;
@@ -134,7 +144,7 @@ export async function createCompany(input: CompanyInput | FormData): Promise<Com
 }
 
 export async function updateCompany(id: string, formData: FormData): Promise<CompanyActionResult> {
-  await requireCompanyAccess();
+  await requireCompanyMutationAccess(id);
 
   const parsed = parseCompanyInput(companyInputFromFormData(formData));
   if (!parsed.ok) return parsed;
@@ -161,7 +171,7 @@ export async function updateCompany(id: string, formData: FormData): Promise<Com
 }
 
 export async function deleteCompany(id: string): Promise<CompanyActionResult> {
-  await requireCompanyAccess();
+  await requireCompanyMutationAccess(id);
 
   const company = await prisma.company.findUnique({
     where: { id },
@@ -190,12 +200,15 @@ export async function deleteCompany(id: string): Promise<CompanyActionResult> {
 }
 
 export async function setActiveCompany(companyId: string | null) {
-  await requireCompanyAccess();
+  const user = await requireCompanyAccess();
   const cookieStore = await cookies();
 
   if (!companyId) {
     cookieStore.delete(ACTIVE_COMPANY_COOKIE);
   } else {
+    if (user.role !== Role.SUPER_ADMIN && user.companyId !== companyId) {
+      throw new Error("You do not have access to this company");
+    }
     const company = await prisma.company.findUnique({ where: { id: companyId }, select: { id: true } });
     if (!company) throw new Error("Company not found");
     cookieStore.set(ACTIVE_COMPANY_COOKIE, company.id, { httpOnly: true, sameSite: "lax", path: "/" });

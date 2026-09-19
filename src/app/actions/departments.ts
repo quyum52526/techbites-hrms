@@ -8,14 +8,20 @@ import { getActiveUser, isHRAdmin } from "@/lib/auth";
 async function assertHRAdmin() {
   const user = await getActiveUser();
   if (!isHRAdmin(user.role)) throw new Error("You do not have permission to manage departments and designations");
+  return user;
 }
 
 export async function createDepartment(formData: FormData) {
-  await assertHRAdmin();
+  const user = await assertHRAdmin();
   const name = (formData.get("name") as string)?.trim();
   const description = formData.get("description") as string;
   // Empty companyId = shared org unit visible to every company.
-  const companyId = (formData.get("companyId") as string) || null;
+  let companyId = (formData.get("companyId") as string) || null;
+  if (user.role !== "SUPER_ADMIN") {
+    if (!user.companyId) throw new Error("Your account is not assigned to a company");
+    if (companyId && companyId !== user.companyId) throw new Error("You cannot manage another company");
+    companyId = user.companyId;
+  }
 
   if (!name) throw new Error("Department name is required");
 
@@ -81,7 +87,12 @@ export async function createDepartmentAction(input: {
   if (!cleaned.ok) return cleaned;
   const { name } = cleaned;
   // Empty companyId = shared org unit visible to every company.
-  const companyId = input.companyId || null;
+  let companyId = input.companyId || null;
+  if (user.role !== "SUPER_ADMIN") {
+    if (!user.companyId) return { ok: false, error: "Your account is not assigned to a company" };
+    if (companyId && companyId !== user.companyId) return { ok: false, error: "You cannot manage another company" };
+    companyId = user.companyId;
+  }
 
   if (companyId) {
     const company = await prisma.company.findUnique({ where: { id: companyId }, select: { id: true } });
