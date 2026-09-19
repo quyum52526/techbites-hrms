@@ -13,7 +13,9 @@ interface Company {
   id: string;
   name: string;
   code: string;
-  isParent: boolean;
+  type: "PARENT" | "SISTER";
+  parentId: string | null;
+  parent: { id: string; name: string } | null;
   logoUrl: string | null;
   address: string | null;
   binNumber: string | null;
@@ -32,12 +34,14 @@ export default function CompanyManager({ companies }: { companies: Company[] }) 
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [logoPreview, setLogoPreview] = useState("");
+  const [companyType, setCompanyType] = useState<Company["type"]>("PARENT");
 
   const editing = modal?.mode === "edit" ? modal.company : null;
 
   const openModal = (state: NonNullable<ModalState>) => {
     setError(null);
     setLogoPreview(state.mode === "edit" ? state.company.logoUrl ?? "" : "");
+    setCompanyType(state.mode === "edit" ? state.company.type : "PARENT");
     setModal(state);
   };
 
@@ -82,6 +86,20 @@ export default function CompanyManager({ companies }: { companies: Company[] }) 
     }
   };
 
+  const groupedCompanies = [
+    ...companies
+      .filter((company) => company.type === "PARENT")
+      .flatMap((parent) => [
+        { company: parent, isChild: false },
+        ...companies
+          .filter((company) => company.type === "SISTER" && company.parentId === parent.id)
+          .map((company) => ({ company, isChild: true })),
+      ]),
+    ...companies
+      .filter((company) => company.type === "SISTER" && !companies.some((parent) => parent.id === company.parentId))
+      .map((company) => ({ company, isChild: true })),
+  ];
+
   return (
     <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-4">
       <div className="flex items-center justify-between pb-3 border-b border-slate-100">
@@ -113,13 +131,14 @@ export default function CompanyManager({ companies }: { companies: Company[] }) 
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {companies.map((company) => (
-                <tr key={company.id} className="hover:bg-slate-50/60">
-                  <td className="py-2.5 pr-3">
+              {groupedCompanies.map(({ company, isChild }) => (
+                <tr key={company.id} className={clsx("hover:bg-slate-50/60", isChild ? "bg-slate-50/40" : "bg-brand-50/20")}>
+                  <td className={clsx("py-2.5 pr-3", isChild && "pl-8")}>
                     <div className="flex items-center gap-2.5">
+                      {isChild && <span className="font-mono text-slate-400" aria-hidden>└─</span>}
                       <CompanyLogo name={company.name} logoUrl={company.logoUrl} />
                       <div className="min-w-0">
-                        <p className="font-medium text-slate-700">{company.name}</p>
+                        <p className={clsx("text-slate-700", isChild ? "font-medium" : "font-semibold")}>{company.name}</p>
                         {(company.email || company.phone) && (
                           <p className="text-[11px] text-slate-500 mt-0.5">
                             {[company.email, company.phone].filter(Boolean).join(" · ")}
@@ -137,10 +156,10 @@ export default function CompanyManager({ companies }: { companies: Company[] }) 
                     <span
                       className={clsx(
                         "px-2.5 py-0.5 rounded-full font-semibold text-[11px]",
-                        company.isParent ? "bg-brand-50 text-brand-700" : "bg-emerald-50 text-emerald-700"
+                        company.type === "PARENT" ? "bg-brand-50 text-brand-700" : "bg-emerald-50 text-emerald-700"
                       )}
                     >
-                      {company.isParent ? "Parent" : "Sister"}
+                      {company.type === "PARENT" ? "Parent Company" : "Sister Concern"}
                     </span>
                   </td>
                   <td className="py-2.5 text-right whitespace-nowrap">
@@ -222,13 +241,22 @@ export default function CompanyManager({ companies }: { companies: Company[] }) 
             </FormField>
           </div>
 
-          <label className="flex items-start gap-2 p-3 rounded-lg border border-slate-200 bg-surface-muted cursor-pointer">
-            <input type="checkbox" name="isParent" defaultChecked={editing?.isParent} className="mt-0.5 w-4 h-4 accent-brand-600" />
-            <span>
-              <span className="block font-medium text-slate-800">Parent company</span>
-              <span className="block text-[11px] text-slate-600">Only one parent is allowed — the current parent becomes a sister concern.</span>
-            </span>
-          </label>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <FormField label="Company structure" required>
+              <select name="type" value={companyType} onChange={(event) => setCompanyType(event.target.value as Company["type"])} className={controlClass}>
+                <option value="PARENT">Independent / Parent Company</option>
+                <option value="SISTER">Sister Concern</option>
+              </select>
+            </FormField>
+            {companyType === "SISTER" && <FormField label="Select Parent Company" required hint="Required for sister concerns">
+              <select name="parentId" defaultValue={editing?.parentId ?? ""} required className={controlClass}>
+                <option value="">Select a parent company</option>
+                {companies.filter((company) => company.type === "PARENT" && company.id !== editing?.id).map((company) => (
+                  <option key={company.id} value={company.id}>{company.name} ({company.code})</option>
+                ))}
+              </select>
+            </FormField>}
+          </div>
 
           {error && (
             <p role="alert" className="px-3 py-2 rounded-lg border border-rose-300 bg-rose-50 text-rose-800 font-medium">

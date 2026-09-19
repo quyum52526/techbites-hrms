@@ -2,7 +2,7 @@ import Sidebar from "@/components/dashboard/Sidebar";
 import TopNav from "@/components/dashboard/TopNav";
 import { MobileNavProvider } from "@/components/dashboard/MobileNav";
 import { getActiveUser } from "@/lib/auth";
-import { getActiveCompanyId } from "@/lib/company";
+import { canSwitchCompanyForUser, getAccessibleCompanyIds, getActiveCompanyId } from "@/lib/company";
 import { prisma } from "@/lib/prisma";
 import { ROLE_OPTIONS } from "@/lib/auth-shared";
 
@@ -25,13 +25,16 @@ export default async function DashboardLayout({
   children: React.ReactNode;
 }) {
   const user = await getActiveUser();
-  const canSwitchCompany = user.role === "SUPER_ADMIN" || user.role === "HR_ADMIN";
+  const canSwitchCompany = await canSwitchCompanyForUser(user);
   const switchableAccounts = process.env.NODE_ENV === "production" ? null : await loadSwitchableAccounts();
+  const accessibleCompanyIds = canSwitchCompany ? await getAccessibleCompanyIds(user) : null;
+  const allowAllCompanies = canSwitchCompany && accessibleCompanyIds === null;
   const [companies, activeCompanyId] = canSwitchCompany
     ? await Promise.all([
         prisma.company.findMany({
+          where: accessibleCompanyIds ? { id: { in: accessibleCompanyIds } } : undefined,
           select: { id: true, name: true, code: true, logoUrl: true },
-          orderBy: [{ isParent: "desc" }, { name: "asc" }],
+          orderBy: [{ type: "asc" }, { parentId: "asc" }, { name: "asc" }],
         }),
         getActiveCompanyId(),
       ])
@@ -47,6 +50,8 @@ export default async function DashboardLayout({
             switchableAccounts={switchableAccounts}
             companies={companies}
             activeCompanyId={activeCompanyId}
+            canSwitchCompany={canSwitchCompany}
+            allowAllCompanies={allowAllCompanies}
           />
           <main className="flex-1 p-4 sm:p-6">{children}</main>
         </div>

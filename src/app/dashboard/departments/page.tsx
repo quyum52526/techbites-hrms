@@ -20,7 +20,7 @@ export default async function DepartmentsPage() {
     }),
     prisma.company.findMany({
       select: { id: true, name: true, code: true },
-      orderBy: [{ isParent: "desc" }, { name: "asc" }],
+      orderBy: [{ type: "asc" }, { parentId: "asc" }, { name: "asc" }],
     }),
     prisma.designation.findMany({
       include: {

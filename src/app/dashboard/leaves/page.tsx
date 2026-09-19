@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { clsx } from "clsx";
-import type { LeaveStatus, Prisma } from "@prisma/client";
+import { LeaveStatus, type Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import ApplyLeaveModal from "@/components/dashboard/ApplyLeaveModal";
 import { updateLeaveStatus } from "@/app/actions/leaves";
@@ -8,18 +8,33 @@ import { canAccess, getActiveUser, isTeamLead } from "@/lib/auth";
 import { employeeScope, getActiveCompanyId } from "@/lib/company";
 import { CalendarDays, Check, X, Clock } from "lucide-react";
 
-const STATUS_FILTERS: { value: LeaveStatus | null; label: string }[] = [
+const PENDING_STATUSES: LeaveStatus[] = [LeaveStatus.PENDING_TL, LeaveStatus.PENDING_MANAGER, LeaveStatus.PENDING_HR];
+
+/** A single approval stage, or the virtual "PENDING" filter covering every in-flight stage. */
+type LeaveFilter = LeaveStatus | "PENDING";
+
+const STATUS_LABELS: Record<LeaveStatus, string> = {
+  PENDING_TL: "Pending TL",
+  PENDING_MANAGER: "Pending Manager",
+  PENDING_HR: "Pending HR",
+  APPROVED: "Approved",
+  REJECTED: "Rejected",
+};
+
+const STATUS_FILTERS: { value: LeaveFilter | null; label: string }[] = [
   { value: null, label: "All" },
   { value: "PENDING", label: "Pending" },
-  { value: "APPROVED", label: "Approved" },
-  { value: "REJECTED", label: "Rejected" },
+  ...Object.values(LeaveStatus).map((status) => ({ value: status, label: STATUS_LABELS[status] })),
 ];
 
-const statusHref = (status: LeaveStatus | null) => (status ? `/dashboard/leaves?status=${status}` : "/dashboard/leaves");
+const statusesFor = (filter: LeaveFilter): LeaveStatus[] => (filter === "PENDING" ? PENDING_STATUSES : [filter]);
+const isPending = (status: LeaveStatus) => PENDING_STATUSES.includes(status);
+const statusHref = (filter: LeaveFilter | null) => (filter ? `/dashboard/leaves?status=${filter}` : "/dashboard/leaves");
 
 export default async function LeavesPage({ searchParams }: { searchParams: Promise<{ status?: string }> }) {
   const requestedStatus = (await searchParams).status?.toUpperCase();
-  const statusFilter = STATUS_FILTERS.find((f) => f.value === requestedStatus)?.value ?? null;
+  const activeFilter = STATUS_FILTERS.find((f) => f.value === requestedStatus) ?? STATUS_FILTERS[0];
+  const statusFilter = activeFilter.value;
 
   const [user, activeCompanyId] = await Promise.all([getActiveUser(), getActiveCompanyId()]);
   const isApprover = canAccess(user.role, "hr");
@@ -30,16 +45,18 @@ export default async function LeavesPage({ searchParams }: { searchParams: Promi
   const leaveScope: Prisma.LeaveRequestWhereInput = isApprover
     ? { employee: employeeScope(activeCompanyId) }
     : isLead
-      ? { employee: { OR: [{ id: selfId }, { managerId: selfId }] } }
+      ? { employee: { OR: [{ id: selfId }, { managerId: selfId }, { manager: { managerId: selfId } }] } }
       : { employeeId: selfId };
-  // Mirrors updateLeaveStatus: a lead decides a direct report's request, never their own.
-  const canDecide = (employee: { managerId: string | null }) => isApprover || (isLead && employee.managerId === selfId);
+  const canDecide = (status: LeaveStatus, employee: { managerId: string | null; manager: { managerId: string | null } | null }) =>
+    (status === "PENDING_TL" && isLead && employee.managerId === selfId) ||
+    (status === "PENDING_MANAGER" && user.role === "MANAGER" && employee.manager?.managerId === selfId) ||
+    (status === "PENDING_HR" && isApprover);
 
   const [leaves, statusCounts, employees, leaveTypes] = await Promise.all([
     prisma.leaveRequest.findMany({
-      where: { ...leaveScope, ...(statusFilter ? { status: statusFilter } : {}) },
+      where: { ...leaveScope, ...(statusFilter ? { status: { in: statusesFor(statusFilter) } } : {}) },
       include: {
-        employee: true,
+        employee: { include: { manager: { select: { managerId: true } } } },
         leaveType: true,
       },
       orderBy: { createdAt: "desc" },
@@ -59,9 +76,15 @@ export default async function LeavesPage({ searchParams }: { searchParams: Promi
   ]);
 
   const countOf = (status: LeaveStatus) => statusCounts.find((c) => c.status === status)?._count._all ?? 0;
-  const pendingCount = countOf("PENDING");
-  const approvedCount = countOf("APPROVED");
-  const rejectedCount = countOf("REJECTED");
+  const pendingCount = PENDING_STATUSES.reduce((sum, status) => sum + countOf(status), 0);
+  const approvedCount = countOf(LeaveStatus.APPROVED);
+  const rejectedCount = countOf(LeaveStatus.REJECTED);
+
+  const statCards: { status: LeaveFilter; label: string; count: number; icon: typeof Clock; tone: string; value: string }[] = [
+    { status: "PENDING", label: "Pending Approvals", count: pendingCount, icon: Clock, tone: "text-amber-700 bg-amber-50", value: "text-amber-700" },
+    { status: LeaveStatus.APPROVED, label: "Approved Leaves", count: approvedCount, icon: Check, tone: "text-emerald-700 bg-emerald-50", value: "text-emerald-700" },
+    { status: LeaveStatus.REJECTED, label: "Rejected Requests", count: rejectedCount, icon: X, tone: "text-rose-700 bg-rose-50", value: "text-rose-700" },
+  ];
 
   return (
     <div className="space-y-6">
@@ -75,11 +98,7 @@ export default async function LeavesPage({ searchParams }: { searchParams: Promi
 
       {/* Metric Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        {[
-          { status: "PENDING" as const, label: "Pending Approvals", count: pendingCount, icon: Clock, tone: "text-amber-700 bg-amber-50", value: "text-amber-700" },
-          { status: "APPROVED" as const, label: "Approved Leaves", count: approvedCount, icon: Check, tone: "text-emerald-700 bg-emerald-50", value: "text-emerald-700" },
-          { status: "REJECTED" as const, label: "Rejected Requests", count: rejectedCount, icon: X, tone: "text-rose-700 bg-rose-50", value: "text-rose-700" },
-        ].map(({ status, label, count, icon: Icon, tone, value }) => (
+        {statCards.map(({ status, label, count, icon: Icon, tone, value }) => (
           <Link
             key={status}
             href={statusHref(statusFilter === status ? null : status)}
@@ -101,9 +120,9 @@ export default async function LeavesPage({ searchParams }: { searchParams: Promi
 
       {/* Leave Requests Table */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-        <div className="p-4 border-b border-slate-100 flex items-center justify-between">
+        <div className="p-4 border-b border-slate-100 flex flex-wrap items-center justify-between gap-2">
           <h3 className="text-sm font-bold text-slate-800">Leave Applications</h3>
-          <nav aria-label="Filter by status" className="flex items-center gap-1">
+          <nav aria-label="Filter by status" className="flex flex-wrap items-center gap-1">
             <CalendarDays className="w-3.5 h-3.5 text-slate-500 mr-1" aria-hidden />
             {STATUS_FILTERS.map((filter) => (
               <Link
@@ -138,7 +157,7 @@ export default async function LeavesPage({ searchParams }: { searchParams: Promi
                 <tr>
                   <td colSpan={6} className="py-8 text-center text-slate-500">
                     {statusFilter
-                      ? `No ${statusFilter.toLowerCase()} leave requests.`
+                      ? `No ${activeFilter.label.toLowerCase()} leave requests.`
                       : 'No leave requests found. Click "Apply for Leave" to create a new application.'}
                   </td>
                 </tr>
@@ -162,17 +181,17 @@ export default async function LeavesPage({ searchParams }: { searchParams: Promi
                     <td className="py-3 px-4 text-slate-600 max-w-xs truncate">{leave.reason}</td>
                     <td className="py-3 px-4">
                       <span className={`px-2 py-0.5 rounded-full text-[11px] font-semibold ${
-                        leave.status === "APPROVED"
+                        leave.status === LeaveStatus.APPROVED
                           ? "bg-emerald-50 text-emerald-700"
-                          : leave.status === "REJECTED"
+                          : leave.status === LeaveStatus.REJECTED
                           ? "bg-rose-50 text-rose-700"
                           : "bg-amber-50 text-amber-700"
                       }`}>
-                        {leave.status}
+                        {STATUS_LABELS[leave.status]}
                       </span>
                     </td>
                     <td className="py-3 px-4 text-right">
-                      {leave.status === "PENDING" && canDecide(leave.employee) ? (
+                      {canDecide(leave.status, leave.employee) ? (
                         <div className="flex items-center justify-end gap-2">
                           <form action={async () => {
                             "use server";
@@ -192,7 +211,7 @@ export default async function LeavesPage({ searchParams }: { searchParams: Promi
                           </form>
                         </div>
                       ) : (
-                        <span className="text-[11px] text-slate-600">{leave.status === "PENDING" ? "Awaiting approval" : "Processed"}</span>
+                        <span className="text-[11px] text-slate-600">{isPending(leave.status) ? "Awaiting approval" : "Processed"}</span>
                       )}
                     </td>
                   </tr>

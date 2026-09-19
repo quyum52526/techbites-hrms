@@ -4,6 +4,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { getActiveUser, isHRAdmin } from "@/lib/auth";
+import { getAccessibleCompanyIds } from "@/lib/company";
 
 async function assertHRAdmin() {
   const user = await getActiveUser();
@@ -19,8 +20,9 @@ export async function createDepartment(formData: FormData) {
   let companyId = (formData.get("companyId") as string) || null;
   if (user.role !== "SUPER_ADMIN") {
     if (!user.companyId) throw new Error("Your account is not assigned to a company");
-    if (companyId && companyId !== user.companyId) throw new Error("You cannot manage another company");
-    companyId = user.companyId;
+    const accessibleIds = await getAccessibleCompanyIds(user);
+    if (companyId && accessibleIds && !accessibleIds.includes(companyId)) throw new Error("You cannot manage another company group");
+    companyId = companyId || user.companyId;
   }
 
   if (!name) throw new Error("Department name is required");
@@ -90,8 +92,9 @@ export async function createDepartmentAction(input: {
   let companyId = input.companyId || null;
   if (user.role !== "SUPER_ADMIN") {
     if (!user.companyId) return { ok: false, error: "Your account is not assigned to a company" };
-    if (companyId && companyId !== user.companyId) return { ok: false, error: "You cannot manage another company" };
-    companyId = user.companyId;
+    const accessibleIds = await getAccessibleCompanyIds(user);
+    if (companyId && accessibleIds && !accessibleIds.includes(companyId)) return { ok: false, error: "You cannot manage another company group" };
+    companyId = companyId || user.companyId;
   }
 
   if (companyId) {

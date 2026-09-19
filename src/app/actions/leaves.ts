@@ -2,7 +2,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
-import type { Prisma } from "@prisma/client";
+import { LeaveStatus, Role } from "@prisma/client";
 import { canAccess, getActiveUser, isTeamLead } from "@/lib/auth";
 import { employeeScope, getActiveCompanyId } from "@/lib/company";
 
@@ -45,7 +45,7 @@ export async function submitLeaveRequest(formData: FormData) {
       startDate,
       endDate,
       reason,
-      status: "PENDING",
+      status: "PENDING_TL",
     },
   });
 
@@ -54,23 +54,35 @@ export async function submitLeaveRequest(formData: FormData) {
 }
 
 /**
- * HR admins decide any request in the selected company. Team leaders and managers decide only their direct
- * reports' requests, never their own (theirs goes to their manager or HR).
+ * Each approval advances exactly one stage. The employee's manager is the TL stage reviewer; that manager's
+ * manager is the next-level reviewer. HR/Super Admin only act at the final HR stage.
  */
 export async function updateLeaveStatus(requestId: string, status: "APPROVED" | "REJECTED") {
   const user = await getActiveUser();
-  let employeeWhere: Prisma.EmployeeWhereInput;
-  if (canAccess(user.role, "hr")) {
-    employeeWhere = employeeScope(await getActiveCompanyId());
-  } else if (isTeamLead(user.role) && user.employeeId) {
-    employeeWhere = { managerId: user.employeeId };
-  } else {
-    throw new Error("You do not have permission to approve or reject leave");
+  const request = await prisma.leaveRequest.findUnique({
+    where: { id: requestId },
+    select: { status: true, employee: { select: { companyId: true, managerId: true, manager: { select: { managerId: true } } } } },
+  });
+  if (!request) throw new Error("Leave request not found");
+
+  let nextStatus: LeaveStatus | null = null;
+  let authorized = false;
+  if (request.status === LeaveStatus.PENDING_TL && isTeamLead(user.role) && user.employeeId === request.employee.managerId) {
+    authorized = true;
+    nextStatus = request.employee.manager?.managerId ? LeaveStatus.PENDING_MANAGER : LeaveStatus.PENDING_HR;
+  } else if (request.status === LeaveStatus.PENDING_MANAGER && user.role === Role.MANAGER && user.employeeId === request.employee.manager?.managerId) {
+    authorized = true;
+    nextStatus = LeaveStatus.PENDING_HR;
+  } else if (request.status === LeaveStatus.PENDING_HR && canAccess(user.role, "hr")) {
+    const activeCompanyId = await getActiveCompanyId();
+    authorized = !activeCompanyId || request.employee.companyId === activeCompanyId;
+    nextStatus = LeaveStatus.APPROVED;
   }
+  if (!authorized || !nextStatus) throw new Error("You are not authorized to process this leave at its current stage");
 
   const { count } = await prisma.leaveRequest.updateMany({
-    where: { id: requestId, status: "PENDING", employee: employeeWhere },
-    data: { status, approvedBy: user.id },
+    where: { id: requestId, status: request.status },
+    data: { status: status === "REJECTED" ? LeaveStatus.REJECTED : nextStatus, approvedBy: user.id },
   });
   if (count === 0) throw new Error("Leave request not found or already processed");
 

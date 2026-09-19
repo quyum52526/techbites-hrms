@@ -1,4 +1,4 @@
-import { PrismaClient, EmploymentType, EmployeeStatus } from "@prisma/client";
+import { PrismaClient, EmploymentType, EmployeeStatus, CompanyType } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
@@ -16,8 +16,8 @@ const EMPLOYEES = [
 async function main() {
   const company = await prisma.company.upsert({
     where: { code: "MAL" },
-    update: { name: "Meghna Apparels Ltd.", logoUrl: "/companies/meghna-logo.svg" },
-    create: { name: "Meghna Apparels Ltd.", code: "MAL", isParent: false, logoUrl: "/companies/meghna-logo.svg" },
+    update: { name: "Meghna Apparels Ltd.", type: CompanyType.PARENT, parentId: null, isParent: true, logoUrl: "/companies/meghna-logo.svg" },
+    create: { name: "Meghna Apparels Ltd.", code: "MAL", type: CompanyType.PARENT, parentId: null, isParent: true, logoUrl: "/companies/meghna-logo.svg" },
   });
 
   for (const fixture of EMPLOYEES) {

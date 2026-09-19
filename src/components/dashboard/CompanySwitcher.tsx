@@ -1,6 +1,7 @@
 "use client";
 
 import { useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { Building2, ChevronDown } from "lucide-react";
 import { setActiveCompany } from "@/app/actions/company";
 import CompanyLogo from "@/components/dashboard/CompanyLogo";
@@ -8,9 +9,12 @@ import CompanyLogo from "@/components/dashboard/CompanyLogo";
 interface Props {
   companies: { id: string; name: string; code: string; logoUrl: string | null }[];
   activeCompanyId: string | null;
+  /** Unscoped "All Companies" is offered only to super admins. */
+  allowAll: boolean;
 }
 
-export default function CompanySwitcher({ companies, activeCompanyId }: Props) {
+export default function CompanySwitcher({ companies, activeCompanyId, allowAll }: Props) {
+  const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const activeCompany = companies.find((company) => company.id === activeCompanyId);
   const activeLogoUrl = activeCompany?.logoUrl ?? null;
@@ -31,11 +35,19 @@ export default function CompanySwitcher({ companies, activeCompanyId }: Props) {
         disabled={isPending}
         onChange={(e) => {
           const value = e.target.value || null;
-          startTransition(() => setActiveCompany(value));
+          startTransition(async () => {
+            try {
+              await setActiveCompany(value);
+            } catch (err) {
+              alert(err instanceof Error ? err.message : "Could not switch company");
+            }
+            // Re-render every Server Component with the new scope (or restore the select after a failure).
+            router.refresh();
+          });
         }}
         className="appearance-none pl-8 pr-7 py-1.5 max-w-36 sm:max-w-52 truncate text-xs font-medium text-slate-700 bg-slate-50 border border-control rounded-md cursor-pointer hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-600 disabled:opacity-60"
       >
-        <option value="">All Companies</option>
+        {allowAll && <option value="">All Companies</option>}
         {companies.map((company) => (
           <option key={company.id} value={company.id}>
             {company.name} ({company.code})

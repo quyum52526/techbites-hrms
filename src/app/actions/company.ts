@@ -1,11 +1,11 @@
 "use server";
 
-import { Prisma, Role } from "@prisma/client";
+import { CompanyType, Prisma, Role } from "@prisma/client";
 import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { getActiveUser } from "@/lib/auth";
-import { ACTIVE_COMPANY_COOKIE } from "@/lib/company";
+import { ACTIVE_COMPANY_COOKIE, canSwitchCompanyForUser, getAccessibleCompanyIds } from "@/lib/company";
 import { isSafeAssetUrl } from "@/lib/employee-profile";
 
 const privilegedRoles: Role[] = [Role.SUPER_ADMIN, Role.HR_ADMIN];
@@ -22,7 +22,8 @@ async function requireCompanyAccess() {
 
 async function requireCompanyMutationAccess(companyId?: string) {
   const user = await requireCompanyAccess();
-  if (user.role !== Role.SUPER_ADMIN && companyId && user.companyId !== companyId) {
+  const accessibleIds = await getAccessibleCompanyIds(user);
+  if (companyId && accessibleIds && !accessibleIds.includes(companyId)) {
     throw new Error("You do not have access to this company");
   }
   return user;
@@ -30,10 +31,11 @@ async function requireCompanyMutationAccess(companyId?: string) {
 
 export async function getCompanies() {
   const user = await requireCompanyAccess();
+  const accessibleIds = await getAccessibleCompanyIds(user);
   const companies = await prisma.company.findMany({
-    where: user.role === Role.SUPER_ADMIN ? undefined : { id: user.companyId ?? "__no-company__" },
-    orderBy: [{ isParent: "desc" }, { name: "asc" }],
-    include: { _count: { select: { employees: true, departments: true } } },
+    where: accessibleIds ? { id: { in: accessibleIds } } : undefined,
+    orderBy: [{ type: "asc" }, { parentId: "asc" }, { name: "asc" }],
+    include: { _count: { select: { employees: true, departments: true } }, parent: { select: { id: true, name: true } } },
   });
 
   return companies.map(({ _count, ...company }) => ({
@@ -46,7 +48,8 @@ export async function getCompanies() {
 export type CompanyInput = {
   name: string;
   code: string;
-  isParent?: boolean;
+  type?: CompanyType;
+  parentId?: string | null;
   address?: string | null;
   binNumber?: string | null;
   phone?: string | null;
@@ -57,6 +60,8 @@ export type CompanyInput = {
 type CompanyData = {
   name: string;
   code: string;
+  type: CompanyType;
+  parentId: string | null;
   isParent: boolean;
   address: string | null;
   binNumber: string | null;
@@ -71,7 +76,8 @@ function companyInputFromFormData(formData: FormData): CompanyInput {
   return {
     name: formData.get("name") as string,
     code: formData.get("code") as string,
-    isParent: formData.get("isParent") === "on",
+    type: (formData.get("type") as CompanyType | null) ?? CompanyType.SISTER,
+    parentId: (formData.get("parentId") as string | null) || null,
     address: formData.get("address") as string | null,
     binNumber: formData.get("binNumber") as string | null,
     phone: formData.get("phone") as string | null,
@@ -85,8 +91,13 @@ function parseCompanyInput(input: CompanyInput): { ok: true; data: CompanyData }
   const code = input.code?.trim().toUpperCase();
   const email = optionalText(input.email);
   const logoUrl = optionalText(input.logoUrl);
+  const type = input.type ?? CompanyType.SISTER;
+  const parentId = optionalText(input.parentId);
 
   if (!name) return { ok: false, error: "Company name is required" };
+  if (!Object.values(CompanyType).includes(type)) return { ok: false, error: "Select a valid company structure" };
+  if (type === CompanyType.SISTER && !parentId) return { ok: false, error: "Select a parent company for a sister concern" };
+  if (type === CompanyType.PARENT && parentId) return { ok: false, error: "Parent companies cannot have a parent company" };
   if (!code || !/^[A-Z0-9-]{2,10}$/.test(code)) {
     return { ok: false, error: "Short code must be 2–10 letters, digits or dashes (e.g. TBM)" };
   }
@@ -102,7 +113,9 @@ function parseCompanyInput(input: CompanyInput): { ok: true; data: CompanyData }
     data: {
       name,
       code,
-      isParent: input.isParent ?? false,
+      type,
+      parentId: type === CompanyType.SISTER ? parentId : null,
+      isParent: type === CompanyType.PARENT,
       address: optionalText(input.address),
       binNumber: optionalText(input.binNumber),
       phone: optionalText(input.phone),
@@ -127,14 +140,13 @@ export async function createCompany(input: CompanyInput | FormData): Promise<Com
   if (!parsed.ok) return parsed;
   const { data } = parsed;
 
+  if (data.parentId) {
+    const parent = await prisma.company.findUnique({ where: { id: data.parentId }, select: { type: true } });
+    if (!parent || parent.type !== CompanyType.PARENT) return { ok: false, error: "Select an existing parent company" };
+  }
+
   try {
-    await prisma.$transaction(async (tx) => {
-      // Only one parent company is allowed; promoting a new one demotes the old.
-      if (data.isParent) {
-        await tx.company.updateMany({ where: { isParent: true }, data: { isParent: false } });
-      }
-      await tx.company.create({ data });
-    });
+    await prisma.company.create({ data });
   } catch (err) {
     return duplicateCodeResult(err, data.code);
   }
@@ -153,13 +165,13 @@ export async function updateCompany(id: string, formData: FormData): Promise<Com
   const existing = await prisma.company.findUnique({ where: { id }, select: { id: true } });
   if (!existing) return { ok: false, error: "Company not found" };
 
+  if (data.parentId) {
+    const parent = await prisma.company.findUnique({ where: { id: data.parentId }, select: { id: true, type: true } });
+    if (!parent || parent.type !== CompanyType.PARENT || parent.id === id) return { ok: false, error: "Select an existing parent company" };
+  }
+
   try {
-    await prisma.$transaction(async (tx) => {
-      if (data.isParent) {
-        await tx.company.updateMany({ where: { isParent: true, id: { not: id } }, data: { isParent: false } });
-      }
-      await tx.company.update({ where: { id }, data });
-    });
+    await prisma.company.update({ where: { id }, data });
   } catch (err) {
     return duplicateCodeResult(err, data.code);
   }
@@ -203,10 +215,14 @@ export async function setActiveCompany(companyId: string | null) {
   const user = await requireCompanyAccess();
   const cookieStore = await cookies();
 
-  if (!companyId) {
+  if (!companyId || companyId === "ALL") {
     cookieStore.delete(ACTIVE_COMPANY_COOKIE);
   } else {
-    if (user.role !== Role.SUPER_ADMIN && user.companyId !== companyId) {
+    if (!(await canSwitchCompanyForUser(user))) {
+      throw new Error("Your account is locked to its own company");
+    }
+    const accessibleIds = await getAccessibleCompanyIds(user);
+    if (accessibleIds && !accessibleIds.includes(companyId)) {
       throw new Error("You do not have access to this company");
     }
     const company = await prisma.company.findUnique({ where: { id: companyId }, select: { id: true } });
@@ -215,4 +231,5 @@ export async function setActiveCompany(companyId: string | null) {
   }
 
   revalidatePath("/dashboard", "layout");
+  revalidatePath("/dashboard");
 }

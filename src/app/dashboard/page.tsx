@@ -7,7 +7,7 @@ import Link from "next/link";
 import { canAccess, getActiveUser } from "@/lib/auth";
 import {
   NO_EMPLOYEES,
-  canSwitchCompany,
+  canSwitchCompanyForUser,
   departmentScope,
   employeeScope,
   getActiveCompanyId,
@@ -31,12 +31,9 @@ export default async function DashboardPage() {
 
   const user = await getActiveUser();
   const isHr = canAccess(user.role, "hr");
-  // Managers see company totals here but can't open the Leaves/Attendance lists behind them, so their tiles stay static.
   const canDrillDown = user.role !== Role.MANAGER;
 
-  // Switcher roles follow the selected company (or all). Everyone else, managers included, is pinned to the
-  // company on their own employee record; with no company they get an empty scope, never the whole group's data.
-  const switcher = canSwitchCompany(user.role);
+  const switcher = await canSwitchCompanyForUser(user);
   const companyId = switcher ? await getActiveCompanyId() : await getOwnCompanyId(user.employeeId);
   const hasNoCompany = !switcher && !companyId;
   const employeeWhere = hasNoCompany ? NO_EMPLOYEES : employeeScope(companyId);
@@ -58,19 +55,22 @@ export default async function DashboardPage() {
     prisma.employee.count({ where: workforceWhere }),
     prisma.employee.count({ where: { ...workforceWhere, joiningDate: { gte: monthStart } } }),
     prisma.department.count({ where: departmentWhere }),
-    prisma.leaveRequest.count({ where: { status: "PENDING", employee: employeeWhere } }),
+    prisma.leaveRequest.count({
+      where: {
+        status: { in: ["PENDING_TL", "PENDING_MANAGER", "PENDING_HR"] },
+        employee: employeeWhere,
+      },
+    }),
     prisma.employee.findMany({
       where: employeeWhere,
       take: 5,
       include: { department: true, designation: true },
       orderBy: { createdAt: "desc" },
     }),
-    // Same definitions as the Attendance page filters, so each tile's number matches the list it opens.
     prisma.attendanceRecord.count({ where: checkedInWhere(workforceWhere, today) }),
     prisma.leaveRequest.count({ where: onLeaveWhere(workforceWhere, today) }),
     prisma.employee.count({ where: notPunchedInWhere(workforceWhere, today) }),
     prisma.shift.findFirst({ orderBy: { createdAt: "asc" }, select: { name: true, startTime: true, endTime: true } }),
-    // QuickPunch is personal: it reads the signed-in user's own record, never another employee's.
     user.employeeId
       ? prisma.attendanceRecord.findUnique({
           where: { employeeId_date: { employeeId: user.employeeId, date: today } },
@@ -105,7 +105,7 @@ export default async function DashboardPage() {
         </p>
       )}
 
-      {/* Metrics Row: tiles drill into the list behind their number where the role can open that list. */}
+      {/* Metrics Row */}
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4">
         <StatCard
           label="Headcount"
@@ -130,7 +130,7 @@ export default async function DashboardPage() {
           value={pendingLeaves}
           icon={CalendarCheck2}
           tone="warning"
-          href={canDrillDown ? "/dashboard/leaves?status=PENDING" : undefined}
+          href={canDrillDown ? "/dashboard/leaves" : undefined}
           badge={pendingLeaves > 0 ? { label: "Needs review", tone: "warning" } : { label: "All clear", tone: "success" }}
         />
         <StatCard
@@ -157,7 +157,7 @@ export default async function DashboardPage() {
         />
       </div>
 
-      {/* Interactive Hub: items-start keeps the punch card compact instead of stretching to the table's height. */}
+      {/* Interactive Hub */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
         {user.employeeId ? (
           <QuickPunch

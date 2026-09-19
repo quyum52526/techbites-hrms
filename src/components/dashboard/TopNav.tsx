@@ -10,11 +10,12 @@ interface Props {
   switchableAccounts: MenuAccount[] | null;
   companies: { id: string; name: string; code: string; logoUrl: string | null }[];
   activeCompanyId: string | null;
+  canSwitchCompany: boolean;
+  allowAllCompanies: boolean;
 }
 
-export default function TopNav({ user, switchableAccounts, companies, activeCompanyId }: Props) {
+export default function TopNav({ user, switchableAccounts, companies, activeCompanyId, canSwitchCompany, allowAllCompanies }: Props) {
   const { role } = user;
-  const canSwitchCompany = role === "SUPER_ADMIN" || role === "HR_ADMIN";
 
   return (
     <header className="sticky top-0 z-30 h-16 bg-white/90 backdrop-blur border-b border-slate-200 px-4 sm:px-6 flex items-center justify-between gap-3 sm:gap-4 shrink-0">
@@ -24,7 +25,7 @@ export default function TopNav({ user, switchableAccounts, companies, activeComp
       </div>
 
       <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-        {canSwitchCompany && <CompanySwitcher companies={companies} activeCompanyId={activeCompanyId} />}
+        {canSwitchCompany && <CompanySwitcher companies={companies} activeCompanyId={activeCompanyId} allowAll={allowAllCompanies} />}
         {/* No notification feed exists yet, so the bell shows no unread dot rather than a permanent false one. */}
         <button
           type="button"

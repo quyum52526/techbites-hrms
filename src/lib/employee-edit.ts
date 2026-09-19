@@ -58,7 +58,7 @@ export async function loadEmployeeFormOptions() {
   const [companies, departments, designations, managers] = await Promise.all([
     prisma.company.findMany({
       select: { id: true, name: true, code: true },
-      orderBy: [{ isParent: "desc" }, { name: "asc" }],
+      orderBy: [{ type: "asc" }, { parentId: "asc" }, { name: "asc" }],
     }),
     prisma.department.findMany({ select: { id: true, name: true, companyId: true }, orderBy: { name: "asc" } }),
     prisma.designation.findMany({ select: { id: true, title: true } }),

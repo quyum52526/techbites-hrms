@@ -18,6 +18,11 @@ enum Role {
   EMPLOYEE
 }
 
+enum CompanyType {
+  PARENT
+  SISTER
+}
+
 enum EmploymentType {
   FULL_TIME
   PART_TIME
@@ -48,10 +53,11 @@ enum AttendanceStatus {
 }
 
 enum LeaveStatus {
-  PENDING
+  PENDING_TL
+  PENDING_MANAGER
+  PENDING_HR
   APPROVED
   REJECTED
-  CANCELLED
 }
 
 enum PayrollStatus {
@@ -96,6 +102,11 @@ model Company {
   id          String          @id @default(cuid())
   name        String          // e.g. "TechBites Media", "TechBites Logistics"
   code        String          @unique // e.g. "TBM", "TBL"
+  type        CompanyType     @default(PARENT)
+  parentId    String?
+  parent      Company?        @relation("ParentCompany", fields: [parentId], references: [id], onDelete: SetNull)
+  sisterConcerns Company[]     @relation("ParentCompany")
+  // Legacy compatibility; type is authoritative for new code.
   isParent    Boolean         @default(false)
   logoUrl     String?
   address     String?
@@ -296,7 +307,7 @@ model LeaveRequest {
   startDate   DateTime     @db.Date
   endDate     DateTime     @db.Date
   reason      String
-  status      LeaveStatus  @default(PENDING)
+  status      LeaveStatus  @default(PENDING_TL)
   approvedBy  String?
 
   createdAt   DateTime     @default(now())

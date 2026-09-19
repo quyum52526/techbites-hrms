@@ -7,7 +7,7 @@ import { importEmployeesCsv } from "@/app/actions/employees";
 import { Eye, Mail, Pencil, Phone } from "lucide-react";
 import Link from "next/link";
 import { requireHRAdmin } from "@/lib/auth";
-import { getActiveCompanyId, employeeScope } from "@/lib/company";
+import { getAccessibleCompanyIds, getActiveCompanyId, employeeScope } from "@/lib/company";
 import { employeeSearchWhere } from "@/lib/employee-search";
 import { loadEditableEmployee, loadEmployeeFormOptions } from "@/lib/employee-edit";
 import { employeeStatusBadgeClass, employeeStatusLabels } from "@/lib/employee-profile";
@@ -39,6 +39,8 @@ export default async function EmployeesPage({ searchParams }: { searchParams: Pr
     loadEmployeeFormOptions(),
     params.edit ? loadEditableEmployee(params.edit) : null,
   ]);
+  const accessibleCompanyIds = await getAccessibleCompanyIds(user);
+  const safeEditing = editing && (!accessibleCompanyIds || (editing.companyId && accessibleCompanyIds.includes(editing.companyId))) ? editing : null;
 
   return (
     <div className="space-y-6">
@@ -171,10 +173,10 @@ export default async function EmployeesPage({ searchParams }: { searchParams: Pr
         </div>
       </div>
 
-      {editing && (
+      {safeEditing && (
         <EditEmployeeModal
-          key={editing.id}
-          employee={editing}
+          key={safeEditing.id}
+          employee={safeEditing}
           companies={companies}
           departments={departments}
           designations={designations}

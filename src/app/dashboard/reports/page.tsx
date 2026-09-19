@@ -4,7 +4,7 @@ import { Prisma, Role } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { Banknote, BarChart3, TrendingUp, Users, CalendarCheck, Building, ShieldAlert } from "lucide-react";
 import { getActiveUser, type ActiveUser } from "@/lib/auth";
-import { canSwitchCompany, departmentScope, employeeScope, getActiveCompanyId, getOwnCompanyId } from "@/lib/company";
+import { canSwitchCompanyForUser, departmentScope, employeeScope, getActiveCompanyId, getOwnCompanyId } from "@/lib/company";
 import { formatMoney } from "@/lib/payroll";
 import StatCard from "@/components/dashboard/StatCard";
 import { cardClass, secondaryButtonClass } from "@/components/ui/styles";
@@ -21,7 +21,7 @@ async function getReportScope(user: ActiveUser): Promise<ReportScope> {
   if (!REPORT_ROLES.includes(user.role)) {
     return { allowed: false, reason: "Reports & BI shows company-wide payroll and workforce totals, so it is limited to administrators and managers." };
   }
-  if (canSwitchCompany(user.role)) return { allowed: true, companyId: await getActiveCompanyId() };
+  if (await canSwitchCompanyForUser(user)) return { allowed: true, companyId: await getActiveCompanyId() };
 
   const companyId = await getOwnCompanyId(user.employeeId);
   if (!companyId) {
@@ -58,7 +58,7 @@ export default async function ReportsPage() {
     ? { OR: [{ companyId }, { companyId: null, employee: { companyId } }] }
     : {};
   // Managers can't open the Employees, Attendance or Payroll lists, so their tiles stay static.
-  const canDrillDown = canSwitchCompany(user.role);
+  const canDrillDown = await canSwitchCompanyForUser(user);
 
   const [
     totalEmployees,

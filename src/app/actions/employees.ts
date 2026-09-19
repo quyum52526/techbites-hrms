@@ -6,7 +6,7 @@ import { revalidatePath } from "next/cache";
 import bcrypt from "bcryptjs";
 import { randomUUID } from "node:crypto";
 import { assignableRoles, canChangeRole, getActiveUser, isHRAdmin, roleLabels } from "@/lib/auth";
-import { getActiveCompanyId, WORKFORCE_STATUSES } from "@/lib/company";
+import { getAccessibleCompanyIds, getActiveCompanyId, WORKFORCE_STATUSES } from "@/lib/company";
 import { readCsvRecords } from "@/lib/csv";
 import { readUploadedCsv, type ImportIssue, type ImportResult } from "@/lib/import-result";
 import { BLOOD_GROUPS, isSeparated, toDateInputValue } from "@/lib/employee-profile";
@@ -70,6 +70,7 @@ export async function createEmployee(formData: FormData): Promise<EmployeeAction
   const employmentType = (formData.get("employmentType") as EmploymentType | null) ?? EmploymentType.FULL_TIME;
   const joiningDate = parseDateInput(formData.get("joiningDate") as string | null);
   const today = parseDateInput(toDateInputValue(new Date()))!;
+  const accessibleCompanyIds = await getAccessibleCompanyIds(user);
   const referenceName = (formData.get("referenceName") as string)?.trim() || null;
   const referencePhone = (formData.get("referencePhone") as string)?.trim() || null;
   const referenceRelation = (formData.get("referenceRelation") as string)?.trim() || null;
@@ -88,8 +89,8 @@ export async function createEmployee(formData: FormData): Promise<EmployeeAction
   const managerId = (formData.get("managerId") as string | null) || null;
   if (user.role !== Role.SUPER_ADMIN) {
     if (!user.companyId) return { ok: false, error: "Your account is not assigned to a company" };
-    if (companyId && companyId !== user.companyId) return { ok: false, error: "You cannot create an employee in another company" };
-    companyId = user.companyId;
+    if (companyId && accessibleCompanyIds && !accessibleCompanyIds.includes(companyId)) return { ok: false, error: "You cannot create an employee outside your company group" };
+    companyId = companyId || user.companyId;
   }
   const managerError = await validateManager(managerId, null, null, companyId);
   if (managerError) return { ok: false, error: managerError };
@@ -357,7 +358,8 @@ export async function updateEmployee(employeeId: string, formData: FormData): Pr
   });
   if (!existing) return { ok: false, error: "This employee no longer exists" };
   if (user.role !== Role.SUPER_ADMIN && !user.companyId) return { ok: false, error: "Your account is not assigned to a company" };
-  if (user.role !== Role.SUPER_ADMIN && existing.companyId !== user.companyId) {
+  const accessibleCompanyIds = await getAccessibleCompanyIds(user);
+  if (accessibleCompanyIds && (!existing.companyId || !accessibleCompanyIds.includes(existing.companyId))) {
     return { ok: false, error: "You cannot edit an employee from another company" };
   }
 

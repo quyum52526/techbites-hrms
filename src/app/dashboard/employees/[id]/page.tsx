@@ -14,6 +14,7 @@ import EditEmployeeModal from "@/components/dashboard/EditEmployeeModal";
 import EmployeeAvatar from "@/components/dashboard/EmployeeAvatar";
 import ReleaseCalculator from "@/components/dashboard/ReleaseCalculator";
 import { cardClass, secondaryButtonClass } from "@/components/ui/styles";
+import { getAccessibleCompanyIds } from "@/lib/company";
 
 const formatDate = (date: Date) =>
   date.toLocaleDateString("en-GB", { timeZone: "Asia/Dhaka", day: "numeric", month: "short", year: "numeric" });
@@ -75,7 +76,8 @@ export default async function EmployeeProfilePage({
     },
   });
   if (!employee) notFound();
-  if (user.role !== "SUPER_ADMIN" && employee.companyId !== user.companyId) notFound();
+  const accessibleCompanyIds = await getAccessibleCompanyIds(user);
+  if (accessibleCompanyIds && (!employee.companyId || !accessibleCompanyIds.includes(employee.companyId))) notFound();
 
   const settlement = employee.settlements[0] ?? null;
   const separated = isSeparated(employee.status);
