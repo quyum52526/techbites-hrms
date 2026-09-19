@@ -154,6 +154,9 @@ model Employee {
   bloodGroup       String?         // e.g. "A+", "O-"
   photoUrl         String?         // /api/files/<id> for an uploaded image, or a site-relative path / http(s) URL
   nidScanUrl       String?         // scanned National ID card; same forms as photoUrl
+  referenceName    String?
+  referencePhone   String?
+  referenceRelation String?
   referenceDetails String?         // free text: referee names, relation and contact numbers
 
   joiningDate      DateTime

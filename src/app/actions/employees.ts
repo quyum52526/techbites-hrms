@@ -68,10 +68,17 @@ export async function createEmployee(formData: FormData): Promise<EmployeeAction
   const departmentId = (formData.get("departmentId") as string) || null;
   const designationId = formData.get("designationId") as string;
   const employmentType = (formData.get("employmentType") as EmploymentType | null) ?? EmploymentType.FULL_TIME;
+  const joiningDate = parseDateInput(formData.get("joiningDate") as string | null);
+  const today = parseDateInput(toDateInputValue(new Date()))!;
+  const referenceName = (formData.get("referenceName") as string)?.trim() || null;
+  const referencePhone = (formData.get("referencePhone") as string)?.trim() || null;
+  const referenceRelation = (formData.get("referenceRelation") as string)?.trim() || null;
 
   if (!email || !firstName || !lastName || !employeeCode) {
     return { ok: false, error: "Required fields are missing" };
   }
+  if (!joiningDate) return { ok: false, error: "Enter a valid joining date" };
+  if (joiningDate > today) return { ok: false, error: "Joining date cannot be in the future" };
 
   const role = formData.has("role") ? parseRole(formData.get("role")) : Role.EMPLOYEE;
   if (!role) return { ok: false, error: "Select a valid system role" };
@@ -130,7 +137,10 @@ export async function createEmployee(formData: FormData): Promise<EmployeeAction
           managerId,
           employmentType,
           status: "ACTIVE",
-          joiningDate: new Date(),
+          joiningDate,
+          referenceName,
+          referencePhone,
+          referenceRelation,
         },
         select: { id: true },
       });
@@ -364,6 +374,9 @@ export async function updateEmployee(employeeId: string, formData: FormData): Pr
   const dateOfBirthRaw = textField(formData, "dateOfBirth");
   const dateOfBirth = dateOfBirthRaw ? parseDateInput(dateOfBirthRaw) : null;
   const bloodGroup = textField(formData, "bloodGroup");
+  const referenceName = textField(formData, "referenceName");
+  const referencePhone = textField(formData, "referencePhone");
+  const referenceRelation = textField(formData, "referenceRelation");
 
   if (!firstName || !lastName || !employeeCode) {
     return { ok: false, error: "First name, last name and employee code are required" };
@@ -371,6 +384,7 @@ export async function updateEmployee(employeeId: string, formData: FormData): Pr
   if (existing.userId && !email) return { ok: false, error: "Work email is required" };
   if (email && !EMAIL_PATTERN.test(email)) return { ok: false, error: "Enter a valid work email" };
   if (!joiningDate) return { ok: false, error: "Enter a valid joining date" };
+  if (joiningDate > parseDateInput(toDateInputValue(new Date()))!) return { ok: false, error: "Joining date cannot be in the future" };
   if (dateOfBirthRaw && !dateOfBirth) return { ok: false, error: "Enter a valid date of birth" };
   if (!EMPLOYMENT_TYPES.includes(employmentType)) return { ok: false, error: "Select an employment type" };
   // A released employee may keep their status; any change must be to an active status (reinstatement).
@@ -446,6 +460,9 @@ export async function updateEmployee(employeeId: string, formData: FormData): Pr
           nationalId: textField(formData, "nationalId"),
           address: textField(formData, "address"),
           bloodGroup,
+          referenceName,
+          referencePhone,
+          referenceRelation,
           ...imageUrls,
           referenceDetails: textField(formData, "referenceDetails"),
           managerId,

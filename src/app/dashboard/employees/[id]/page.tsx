@@ -214,8 +214,15 @@ export default async function EmployeeProfilePage({
         </Panel>
 
         <Panel title="References">
-          {employee.referenceDetails ? (
-            <p className="text-xs text-slate-800 whitespace-pre-line">{employee.referenceDetails}</p>
+          {employee.referenceName || employee.referencePhone || employee.referenceRelation || employee.referenceDetails ? (
+            <Details
+              items={[
+                ["Name", employee.referenceName],
+                ["Contact number", employee.referencePhone && <a href={`tel:${employee.referencePhone}`} className="text-brand-700 hover:underline">{employee.referencePhone}</a>],
+                ["Relationship / Details", employee.referenceRelation],
+                ["Additional notes", employee.referenceDetails && <span className="whitespace-pre-line">{employee.referenceDetails}</span>],
+              ]}
+            />
           ) : (
             <p className="text-xs text-slate-500">No references recorded.</p>
           )}

@@ -40,6 +40,9 @@ export async function loadEditableEmployee(id: string): Promise<EditableEmployee
     photoUrl: employee.photoUrl,
     nidScanUrl: employee.nidScanUrl,
     referenceDetails: employee.referenceDetails,
+    referenceName: employee.referenceName,
+    referencePhone: employee.referencePhone,
+    referenceRelation: employee.referenceRelation,
   };
 }
 

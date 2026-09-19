@@ -10,7 +10,7 @@ import OrgUnitFields from "@/components/dashboard/OrgUnitFields";
 import AccessFields from "@/components/dashboard/AccessFields";
 import type { Role } from "@prisma/client";
 import type { ManagerOption } from "@/lib/employee-edit";
-import { NID_SCAN_MAX_PX, PHOTO_MAX_PX } from "@/lib/employee-profile";
+import { NID_SCAN_MAX_PX, PHOTO_MAX_PX, toDateInputValue } from "@/lib/employee-profile";
 import { controlClass, primaryButtonClass, secondaryButtonClass } from "@/components/ui/styles";
 
 interface Props {
@@ -108,9 +108,12 @@ export default function AddEmployeeModal({ companies, departments, designations,
 
           <AccessFields actorRole={actorRole} managers={managers} />
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <FormField label="Phone number">
               <input name="phone" type="tel" autoComplete="off" className={controlClass} />
+            </FormField>
+            <FormField label="Joining date" required>
+              <input name="joiningDate" type="date" defaultValue={toDateInputValue(new Date())} className={controlClass} />
             </FormField>
             <FormField label="Employment type">
               <select name="employmentType" className={controlClass}>
@@ -121,6 +124,21 @@ export default function AddEmployeeModal({ companies, departments, designations,
               </select>
             </FormField>
           </div>
+
+          <fieldset className="space-y-4">
+            <legend className="mb-3 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Reference Information (Optional)</legend>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <FormField label="Reference name">
+                <input name="referenceName" autoComplete="off" className={controlClass} />
+              </FormField>
+              <FormField label="Reference contact number">
+                <input name="referencePhone" type="tel" autoComplete="off" className={controlClass} />
+              </FormField>
+              <FormField label="Relationship / Details" hint="e.g. Professional, Academic, Relative">
+                <input name="referenceRelation" autoComplete="off" className={controlClass} />
+              </FormField>
+            </div>
+          </fieldset>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <ImageUploadField name="photo" label="Photo" shape="circle" maxDimension={PHOTO_MAX_PX} />

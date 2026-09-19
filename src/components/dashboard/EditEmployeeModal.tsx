@@ -42,6 +42,9 @@ export type EditableEmployee = {
   photoUrl: string | null;
   nidScanUrl: string | null;
   referenceDetails: string | null;
+  referenceName: string | null;
+  referencePhone: string | null;
+  referenceRelation: string | null;
 };
 
 interface Props {
@@ -233,6 +236,20 @@ export default function EditEmployeeModal({ employee, companies, departments, de
           <FormField label="Address">
             <textarea name="address" rows={2} defaultValue={employee.address ?? ""} className={controlClass} />
           </FormField>
+        </Section>
+
+        <Section title="Reference Information (Optional)">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <FormField label="Reference name">
+              <input name="referenceName" defaultValue={employee.referenceName ?? ""} autoComplete="off" className={controlClass} />
+            </FormField>
+            <FormField label="Reference contact number">
+              <input name="referencePhone" type="tel" defaultValue={employee.referencePhone ?? ""} autoComplete="off" className={controlClass} />
+            </FormField>
+            <FormField label="Relationship / Details" hint="e.g. Professional, Academic, Relative">
+              <input name="referenceRelation" defaultValue={employee.referenceRelation ?? ""} autoComplete="off" className={controlClass} />
+            </FormField>
+          </div>
         </Section>
 
         <Section title="Documents & references">

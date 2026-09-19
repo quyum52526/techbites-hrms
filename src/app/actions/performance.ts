@@ -61,7 +61,7 @@ export async function getReviewsForCycle(cycleId: string, managerEmployeeId?: st
 
   const employees = await prisma.employee.findMany({
     where: employeeFilter,
-    include: { department: true, manager: true, user: true },
+    include: { department: true, designation: true, manager: true, user: true },
     orderBy: [{ department: { name: "asc" } }, { lastName: "asc" }],
   });
   const reviews = await prisma.appraisalReview.findMany({
@@ -75,22 +75,29 @@ export async function getReviewsForCycle(cycleId: string, managerEmployeeId?: st
   }));
 }
 
-export async function submitEmployeeReview(
-  reviewId: string,
+export async function submitPerformanceReview(
+  cycleId: string,
+  employeeId: string,
   metrics: { productivity: number; qualityOfWork: number; collaboration: number; feedback?: string },
 ) {
   const user = await requirePerformanceAccess();
-  const review = await prisma.appraisalReview.findUnique({
-    where: { id: reviewId },
-    include: { cycle: true, employee: true },
-  });
-  if (!review) throw new Error("Review not found");
-  if (isTeamLead(user.role) && review.employee.managerId !== user.employeeId) {
+  const [cycle, employee] = await Promise.all([
+    prisma.appraisalCycle.findUnique({ where: { id: cycleId } }),
+    prisma.employee.findUnique({ where: { id: employeeId }, select: { id: true, managerId: true } }),
+  ]);
+  if (!cycle) throw new Error("Appraisal cycle not found");
+  if (!employee) throw new Error("Employee not found");
+  if (isTeamLead(user.role) && employee.managerId !== user.employeeId) {
     throw new Error("You can only review direct reports");
   }
+  if (![metrics.productivity, metrics.qualityOfWork, metrics.collaboration].every((score) => Number.isInteger(score) && score >= 1 && score <= 5)) {
+    throw new Error("Each rating must be an integer from 1 to 5");
+  }
+  const feedback = metrics.feedback?.trim();
+  if (!feedback) throw new Error("Feedback is required");
 
   const attendance = await prisma.attendanceRecord.findMany({
-    where: { employeeId: review.employeeId, date: { gte: review.cycle.startDate, lte: review.cycle.endDate } },
+    where: { employeeId, date: { gte: cycle.startDate, lte: cycle.endDate } },
     select: { status: true },
   });
   const attendanceScore = attendance.length === 0
@@ -98,10 +105,25 @@ export async function submitEmployeeReview(
     : (attendance.filter((record) => ["PRESENT", "LATE"].includes(record.status)).length / attendance.length) * 100;
   const finalScore = attendanceScore * 0.4 + ((metrics.productivity + metrics.qualityOfWork + metrics.collaboration) / 3) * 20 * 0.6;
 
-  const updated = await prisma.appraisalReview.update({
-    where: { id: reviewId },
-    data: {
-      ...metrics,
+  const updated = await prisma.appraisalReview.upsert({
+    where: { cycleId_employeeId: { cycleId, employeeId } },
+    create: {
+      cycleId,
+      employeeId,
+      productivity: metrics.productivity,
+      qualityOfWork: metrics.qualityOfWork,
+      collaboration: metrics.collaboration,
+      feedback,
+      reviewerId: user.id,
+      attendanceScore,
+      finalScore,
+      status: user.role === Role.TEAM_LEADER ? AppraisalStatus.SUBMITTED : AppraisalStatus.REVIEWED,
+    },
+    update: {
+      productivity: metrics.productivity,
+      qualityOfWork: metrics.qualityOfWork,
+      collaboration: metrics.collaboration,
+      feedback,
       reviewerId: user.id,
       attendanceScore,
       finalScore,
@@ -110,4 +132,14 @@ export async function submitEmployeeReview(
   });
   revalidatePath("/dashboard/performance");
   return updated;
+}
+
+/** Compatibility path for the older inline review form. */
+export async function submitEmployeeReview(
+  reviewId: string,
+  metrics: { productivity: number; qualityOfWork: number; collaboration: number; feedback?: string },
+) {
+  const review = await prisma.appraisalReview.findUnique({ where: { id: reviewId }, select: { cycleId: true, employeeId: true } });
+  if (!review) throw new Error("Review not found");
+  return submitPerformanceReview(review.cycleId, review.employeeId, metrics);
 }

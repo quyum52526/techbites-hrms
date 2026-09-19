@@ -3,7 +3,7 @@ import { clsx } from "clsx";
 import { requireRole } from "@/lib/auth";
 import { PERFORMANCE_ROLES } from "@/lib/auth-shared";
 import { getAppraisalCycles, getReviewsForCycle } from "@/app/actions/performance";
-import PerformanceReviewForm from "@/components/dashboard/PerformanceReviewForm";
+import ReviewModal from "@/components/dashboard/ReviewModal";
 import CycleSelect from "@/components/dashboard/CycleSelect";
 import StatCard from "@/components/dashboard/StatCard";
 import { cardClass } from "@/components/ui/styles";
@@ -80,13 +80,21 @@ export default async function PerformancePage({ searchParams }: { searchParams: 
                       <td className="py-3 px-4 font-bold tabular-nums text-brand-700">{review ? `${review.finalScore.toFixed(1)} / 100` : "–"}</td>
                       <td className="py-3 px-4">
                         {review ? (
-                          <PerformanceReviewForm
-                            reviewId={review.id}
+                          <ReviewModal
+                            cycleId={cycle.id}
+                            employeeId={employee.id}
                             employeeName={name}
-                            values={{ productivity: review.productivity, qualityOfWork: review.qualityOfWork, collaboration: review.collaboration }}
+                            designation={employee.designation?.title ?? "No designation"}
+                            review={review}
                           />
                         ) : (
-                          <span className="text-slate-600">No review record</span>
+                          <ReviewModal
+                            cycleId={cycle.id}
+                            employeeId={employee.id}
+                            employeeName={name}
+                            designation={employee.designation?.title ?? "No designation"}
+                            review={null}
+                          />
                         )}
                       </td>
                     </tr>
