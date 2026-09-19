@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useId, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import type { EmployeeStatus, EmploymentType, Role } from "@prisma/client";
 import { updateEmployee } from "@/app/actions/employees";
-import Modal, { ModalActions } from "@/components/ui/Modal";
+import Modal from "@/components/ui/Modal";
 import FormField from "@/components/ui/FormField";
 import ImageUploadField from "@/components/ui/ImageUploadField";
 import OrgUnitFields from "@/components/dashboard/OrgUnitFields";
@@ -64,7 +64,8 @@ const EDITABLE_STATUSES: EmployeeStatus[] = ["ACTIVE", "PROBATION", "NOTICE_PERI
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <fieldset className="space-y-4">
+    // Fieldsets default to min-width: min-content, which pushes the form wider than a phone screen; min-w-0 undoes it.
+    <fieldset className="min-w-0 space-y-4">
       <legend className="mb-3 text-[11px] font-semibold uppercase tracking-wide text-slate-500">{title}</legend>
       {children}
     </fieldset>
@@ -77,6 +78,7 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
  */
 export default function EditEmployeeModal({ employee, companies, departments, designations, managers, actor, closeHref }: Props) {
   const router = useRouter();
+  const formId = useId();
   const [isOpen, setIsOpen] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -107,8 +109,24 @@ export default function EditEmployeeModal({ employee, companies, departments, de
       size="2xl"
       title={`Edit ${employee.firstName} ${employee.lastName}`}
       description={`Employee code ${employee.employeeCode}`}
+      footer={
+        <>
+          {/* In the pinned footer so a save error is visible wherever the form is scrolled. */}
+          {error && (
+            <p role="alert" className="w-full px-3 py-2 rounded-lg border border-rose-300 bg-rose-50 text-xs text-rose-800 font-medium">
+              {error}
+            </p>
+          )}
+          <button type="button" onClick={() => setIsOpen(false)} className={secondaryButtonClass}>
+            Cancel
+          </button>
+          <button type="submit" form={formId} disabled={loading} className={primaryButtonClass}>
+            {loading ? "Saving…" : "Save Changes"}
+          </button>
+        </>
+      }
     >
-      <form onSubmit={handleSubmit} className="p-6 space-y-6 text-xs">
+      <form id={formId} onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-6 text-xs">
         <Section title="Identity & login">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <FormField label="First name" required>
@@ -267,21 +285,6 @@ export default function EditEmployeeModal({ employee, companies, departments, de
             <textarea name="referenceDetails" rows={3} defaultValue={employee.referenceDetails ?? ""} className={controlClass} />
           </FormField>
         </Section>
-
-        {error && (
-          <p role="alert" className="px-3 py-2 rounded-lg border border-rose-300 bg-rose-50 text-rose-800 font-medium">
-            {error}
-          </p>
-        )}
-
-        <ModalActions>
-          <button type="button" onClick={() => setIsOpen(false)} className={secondaryButtonClass}>
-            Cancel
-          </button>
-          <button type="submit" disabled={loading} className={primaryButtonClass}>
-            {loading ? "Saving…" : "Save Changes"}
-          </button>
-        </ModalActions>
       </form>
     </Modal>
   );

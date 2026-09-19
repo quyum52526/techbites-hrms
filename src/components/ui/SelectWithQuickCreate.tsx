@@ -163,7 +163,7 @@ export default function SelectWithQuickCreate({
               aria-busy={pending || undefined}
               aria-invalid={error ? true : undefined}
               aria-describedby={describedBy}
-              className={clsx(controlClass, "py-1.5")}
+              className={clsx(controlClass, "min-w-0 py-1.5")}
             />
             <button
               type="button"

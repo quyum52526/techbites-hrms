@@ -59,6 +59,11 @@ interface ModalProps {
   role?: "dialog" | "alertdialog";
   /** false blocks Esc, backdrop click and the close button, e.g. while a confirmed action is running. */
   dismissible?: boolean;
+  /**
+   * Pinned below the scrolling body so it never scrolls out of view, e.g. a long form's Cancel/Save buttons.
+   * Buttons here sit outside the <form>, so link the submit button with the `form` attribute.
+   */
+  footer?: ReactNode;
   children: ReactNode;
 }
 
@@ -76,6 +81,7 @@ export default function Modal({
   icon,
   role,
   dismissible = true,
+  footer,
   children,
 }: ModalProps) {
   const dialogRef = useRef<HTMLDialogElement>(null);
@@ -120,10 +126,10 @@ export default function Modal({
     >
       {open && (
         <>
-          <div className="flex items-start gap-3 px-6 py-4 border-b border-slate-100">
+          <div className="flex shrink-0 items-start gap-3 px-4 sm:px-6 py-4 border-b border-slate-100">
             {icon}
             <div className="min-w-0 flex-1">
-              <h2 id={titleId} className="text-sm font-semibold text-slate-900">
+              <h2 id={titleId} className="text-sm font-semibold text-slate-900 break-words">
                 {title}
               </h2>
               {description && (
@@ -142,7 +148,13 @@ export default function Modal({
               <X className="w-4 h-4" aria-hidden />
             </button>
           </div>
-          <div className="overflow-y-auto">{children}</div>
+          {/* min-h-0 lets the body shrink inside the height-capped dialog, so it scrolls instead of overflowing. */}
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">{children}</div>
+          {footer && (
+            <div className="flex shrink-0 flex-wrap items-center justify-end gap-3 px-4 sm:px-6 py-4 border-t border-slate-100 bg-slate-50/80">
+              {footer}
+            </div>
+          )}
         </>
       )}
     </dialog>
