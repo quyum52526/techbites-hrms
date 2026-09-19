@@ -1,17 +1,31 @@
 import { prisma } from "@/lib/prisma";
 import AddEmployeeModal from "@/components/dashboard/AddEmployeeModal";
 import CsvImportModal from "@/components/dashboard/CsvImportModal";
+import EditEmployeeModal from "@/components/dashboard/EditEmployeeModal";
+import EmployeeAvatar from "@/components/dashboard/EmployeeAvatar";
 import { importEmployeesCsv } from "@/app/actions/employees";
-import { Mail, Phone } from "lucide-react";
+import { Eye, Mail, Pencil, Phone } from "lucide-react";
 import Link from "next/link";
+import { requireHRAdmin } from "@/lib/auth";
 import { getActiveCompanyId, employeeScope } from "@/lib/company";
 import { employeeSearchWhere } from "@/lib/employee-search";
+import { loadEditableEmployee, loadEmployeeFormOptions } from "@/lib/employee-edit";
+import { employeeStatusBadgeClass, employeeStatusLabels } from "@/lib/employee-profile";
 
-export default async function EmployeesPage({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
-  const query = (await searchParams).q?.trim() ?? "";
+const rowActionClass =
+  "inline-flex items-center gap-1 px-2 py-1 rounded-md border border-slate-200 font-medium text-slate-700 hover:bg-slate-50 hover:border-slate-300 transition-colors duration-150";
+
+export default async function EmployeesPage({ searchParams }: { searchParams: Promise<{ q?: string; edit?: string }> }) {
+  const params = await searchParams;
+  const query = params.q?.trim() ?? "";
+  const user = await requireHRAdmin();
   const activeCompanyId = await getActiveCompanyId();
 
-  const [employees, companies, departments, designations] = await Promise.all([
+  // Search is kept in every row link, so opening and closing the edit modal returns to the same results.
+  const listHref = query ? `/dashboard/employees?q=${encodeURIComponent(query)}` : "/dashboard/employees";
+  const editHref = (id: string) => `${listHref}${query ? "&" : "?"}edit=${encodeURIComponent(id)}`;
+
+  const [employees, { companies, departments, designations, managers }, editing] = await Promise.all([
     prisma.employee.findMany({
       where: { ...employeeScope(activeCompanyId), ...(query ? employeeSearchWhere(query) : {}) },
       include: {
@@ -22,12 +36,8 @@ export default async function EmployeesPage({ searchParams }: { searchParams: Pr
       },
       orderBy: { createdAt: "desc" },
     }),
-    prisma.company.findMany({
-      select: { id: true, name: true, code: true },
-      orderBy: [{ isParent: "desc" }, { name: "asc" }],
-    }),
-    prisma.department.findMany({ select: { id: true, name: true, companyId: true }, orderBy: { name: "asc" } }),
-    prisma.designation.findMany({ select: { id: true, title: true } }),
+    loadEmployeeFormOptions(),
+    params.edit ? loadEditableEmployee(params.edit) : null,
   ]);
 
   return (
@@ -71,6 +81,8 @@ export default async function EmployeesPage({ searchParams }: { searchParams: Pr
             companies={companies}
             departments={departments}
             designations={designations}
+            managers={managers}
+            actorRole={user.role}
             activeCompanyId={activeCompanyId}
           />
         </div>
@@ -88,6 +100,7 @@ export default async function EmployeesPage({ searchParams }: { searchParams: Pr
                 <th className="py-3 px-4">Contact</th>
                 <th className="py-3 px-4">Type</th>
                 <th className="py-3 px-4">Status</th>
+                <th className="py-3 px-4 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -95,11 +108,11 @@ export default async function EmployeesPage({ searchParams }: { searchParams: Pr
                 <tr key={emp.id} className="hover:bg-slate-50/60">
                   <td className="py-3 px-4">
                     <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-full bg-brand-50 text-brand-600 font-bold flex items-center justify-center text-xs">
-                        {emp.firstName[0]}{emp.lastName[0]}
-                      </div>
+                      <EmployeeAvatar firstName={emp.firstName} lastName={emp.lastName} photoUrl={emp.photoUrl} />
                       <div>
-                        <p className="font-semibold text-slate-900">{emp.firstName} {emp.lastName}</p>
+                        <Link href={`/dashboard/employees/${emp.id}`} className="font-semibold text-slate-900 hover:text-brand-700 hover:underline">
+                          {emp.firstName} {emp.lastName}
+                        </Link>
                         <p className="text-[11px] text-slate-500">{emp.user?.email}</p>
                       </div>
                     </div>
@@ -128,9 +141,28 @@ export default async function EmployeesPage({ searchParams }: { searchParams: Pr
                     </span>
                   </td>
                   <td className="py-3 px-4">
-                    <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700">
-                      {emp.status}
+                    <span className={`px-2 py-0.5 rounded-full text-[11px] font-semibold whitespace-nowrap ${employeeStatusBadgeClass[emp.status]}`}>
+                      {employeeStatusLabels[emp.status]}
                     </span>
+                  </td>
+                  <td className="py-3 px-4">
+                    <div className="flex justify-end gap-1.5">
+                      <Link
+                        href={`/dashboard/employees/${emp.id}`}
+                        aria-label={`View profile of ${emp.firstName} ${emp.lastName}`}
+                        className={rowActionClass}
+                      >
+                        <Eye className="w-3.5 h-3.5" aria-hidden /> View
+                      </Link>
+                      <Link
+                        href={editHref(emp.id)}
+                        scroll={false}
+                        aria-label={`Edit profile of ${emp.firstName} ${emp.lastName}`}
+                        className={rowActionClass}
+                      >
+                        <Pencil className="w-3.5 h-3.5" aria-hidden /> Edit
+                      </Link>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -138,6 +170,19 @@ export default async function EmployeesPage({ searchParams }: { searchParams: Pr
           </table>
         </div>
       </div>
+
+      {editing && (
+        <EditEmployeeModal
+          key={editing.id}
+          employee={editing}
+          companies={companies}
+          departments={departments}
+          designations={designations}
+          managers={managers}
+          actor={{ role: user.role, employeeId: user.employeeId }}
+          closeHref={listHref}
+        />
+      )}
     </div>
   );
 }

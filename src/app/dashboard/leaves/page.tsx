@@ -4,7 +4,7 @@ import type { LeaveStatus, Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import ApplyLeaveModal from "@/components/dashboard/ApplyLeaveModal";
 import { updateLeaveStatus } from "@/app/actions/leaves";
-import { canAccess, getActiveUser } from "@/lib/auth";
+import { canAccess, getActiveUser, isTeamLead } from "@/lib/auth";
 import { employeeScope, getActiveCompanyId } from "@/lib/company";
 import { CalendarDays, Check, X, Clock } from "lucide-react";
 
@@ -23,11 +23,17 @@ export default async function LeavesPage({ searchParams }: { searchParams: Promi
 
   const [user, activeCompanyId] = await Promise.all([getActiveUser(), getActiveCompanyId()]);
   const isApprover = canAccess(user.role, "hr");
+  const isLead = isTeamLead(user.role);
+  const selfId = user.employeeId ?? "__no-employee__";
 
-  // Approvers see the selected company; everyone else sees only their own applications.
+  // HR sees the selected company; team leads their own and their direct reports' requests; everyone else their own.
   const leaveScope: Prisma.LeaveRequestWhereInput = isApprover
     ? { employee: employeeScope(activeCompanyId) }
-    : { employeeId: user.employeeId ?? "__no-employee__" };
+    : isLead
+      ? { employee: { OR: [{ id: selfId }, { managerId: selfId }] } }
+      : { employeeId: selfId };
+  // Mirrors updateLeaveStatus: a lead decides a direct report's request, never their own.
+  const canDecide = (employee: { managerId: string | null }) => isApprover || (isLead && employee.managerId === selfId);
 
   const [leaves, statusCounts, employees, leaveTypes] = await Promise.all([
     prisma.leaveRequest.findMany({
@@ -166,7 +172,7 @@ export default async function LeavesPage({ searchParams }: { searchParams: Promi
                       </span>
                     </td>
                     <td className="py-3 px-4 text-right">
-                      {leave.status === "PENDING" && isApprover ? (
+                      {leave.status === "PENDING" && canDecide(leave.employee) ? (
                         <div className="flex items-center justify-end gap-2">
                           <form action={async () => {
                             "use server";
@@ -186,7 +192,7 @@ export default async function LeavesPage({ searchParams }: { searchParams: Promi
                           </form>
                         </div>
                       ) : (
-                        <span className="text-[11px] text-slate-600">{leave.status === "PENDING" ? "Awaiting HR" : "Processed"}</span>
+                        <span className="text-[11px] text-slate-600">{leave.status === "PENDING" ? "Awaiting approval" : "Processed"}</span>
                       )}
                     </td>
                   </tr>

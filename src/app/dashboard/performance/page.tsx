@@ -1,6 +1,7 @@
 import { Gauge, Users, CalendarDays } from "lucide-react";
 import { clsx } from "clsx";
-import { getActiveUser } from "@/lib/auth";
+import { requireRole } from "@/lib/auth";
+import { PERFORMANCE_ROLES } from "@/lib/auth-shared";
 import { getAppraisalCycles, getReviewsForCycle } from "@/app/actions/performance";
 import PerformanceReviewForm from "@/components/dashboard/PerformanceReviewForm";
 import CycleSelect from "@/components/dashboard/CycleSelect";
@@ -10,10 +11,12 @@ import { cardClass } from "@/components/ui/styles";
 const formatDate = (date: Date) => date.toLocaleDateString("en-GB", { timeZone: "Asia/Dhaka", day: "numeric", month: "short", year: "numeric" });
 
 export default async function PerformancePage({ searchParams }: { searchParams: Promise<{ cycle?: string }> }) {
-  const [user, cycles, { cycle: requestedCycle }] = await Promise.all([getActiveUser(), getAppraisalCycles(), searchParams]);
+  // Guard first: the actions below throw for other roles, which would show an error page instead of redirecting.
+  await requireRole(PERFORMANCE_ROLES);
+  const [cycles, { cycle: requestedCycle }] = await Promise.all([getAppraisalCycles(), searchParams]);
   // Only ids from the list are accepted, so a stale or hand-edited ?cycle= falls back to the current cycle.
   const cycle = cycles.find((c) => c.id === requestedCycle) ?? cycles[0];
-  const rows = cycle ? await getReviewsForCycle(cycle.id, user.employeeId ?? undefined) : [];
+  const rows = cycle ? await getReviewsForCycle(cycle.id) : [];
 
   return (
     <div className="space-y-6">

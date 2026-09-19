@@ -2,7 +2,8 @@
 
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
-import { canAccess, getActiveUser } from "@/lib/auth";
+import type { Prisma } from "@prisma/client";
+import { canAccess, getActiveUser, isTeamLead } from "@/lib/auth";
 import { employeeScope, getActiveCompanyId } from "@/lib/company";
 
 export async function submitLeaveRequest(formData: FormData) {
@@ -52,16 +53,24 @@ export async function submitLeaveRequest(formData: FormData) {
   revalidatePath("/dashboard");
 }
 
+/**
+ * HR admins decide any request in the selected company. Team leaders and managers decide only their direct
+ * reports' requests, never their own (theirs goes to their manager or HR).
+ */
 export async function updateLeaveStatus(requestId: string, status: "APPROVED" | "REJECTED") {
   const user = await getActiveUser();
-  if (!canAccess(user.role, "hr")) {
+  let employeeWhere: Prisma.EmployeeWhereInput;
+  if (canAccess(user.role, "hr")) {
+    employeeWhere = employeeScope(await getActiveCompanyId());
+  } else if (isTeamLead(user.role) && user.employeeId) {
+    employeeWhere = { managerId: user.employeeId };
+  } else {
     throw new Error("You do not have permission to approve or reject leave");
   }
 
-  const activeCompanyId = await getActiveCompanyId();
   const { count } = await prisma.leaveRequest.updateMany({
-    where: { id: requestId, status: "PENDING", employee: employeeScope(activeCompanyId) },
-    data: { status },
+    where: { id: requestId, status: "PENDING", employee: employeeWhere },
+    data: { status, approvedBy: user.id },
   });
   if (count === 0) throw new Error("Leave request not found or already processed");
 

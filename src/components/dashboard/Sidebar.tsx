@@ -16,18 +16,18 @@ import {
 } from "lucide-react";
 import { clsx } from "clsx";
 import type { Role } from "@prisma/client";
-import { roleLabels } from "@/lib/auth-shared";
+import { PERFORMANCE_ROLES, roleLabels } from "@/lib/auth-shared";
 import { MobileNavDrawer } from "@/components/dashboard/MobileNav";
 
 export const navItems = [
   { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard, roles: ["SUPER_ADMIN", "HR_ADMIN", "MANAGER", "TEAM_LEADER", "EMPLOYEE"] },
   { label: "Employees", href: "/dashboard/employees", icon: Users, roles: ["SUPER_ADMIN", "HR_ADMIN"] },
-  { label: "Attendance", href: "/dashboard/attendance", icon: Clock, roles: ["SUPER_ADMIN", "HR_ADMIN", "TEAM_LEADER", "EMPLOYEE"] },
-  { label: "Leave Requests", href: "/dashboard/leaves", icon: CalendarDays, roles: ["SUPER_ADMIN", "HR_ADMIN", "EMPLOYEE"] },
+  { label: "Attendance", href: "/dashboard/attendance", icon: Clock, roles: ["SUPER_ADMIN", "HR_ADMIN", "MANAGER", "TEAM_LEADER", "EMPLOYEE"] },
+  { label: "Leave Requests", href: "/dashboard/leaves", icon: CalendarDays, roles: ["SUPER_ADMIN", "HR_ADMIN", "MANAGER", "TEAM_LEADER", "EMPLOYEE"] },
   { label: "Payroll", href: "/dashboard/payroll", icon: CreditCard, roles: ["SUPER_ADMIN", "HR_ADMIN", "EMPLOYEE"] },
   { label: "Departments", href: "/dashboard/departments", icon: Building2, roles: ["SUPER_ADMIN", "HR_ADMIN"] },
   { label: "Reports & BI", href: "/dashboard/reports", icon: BarChart3, roles: ["SUPER_ADMIN", "HR_ADMIN", "MANAGER"] },
-  { label: "Performance", href: "/dashboard/performance", icon: Gauge, roles: ["SUPER_ADMIN", "HR_ADMIN", "TEAM_LEADER"] },
+  { label: "Performance", href: "/dashboard/performance", icon: Gauge, roles: PERFORMANCE_ROLES },
   { label: "Settings", href: "/dashboard/settings", icon: Settings, roles: ["SUPER_ADMIN", "HR_ADMIN"] },
 ];
 

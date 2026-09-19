@@ -1,14 +1,17 @@
 "use server";
 
-import { EmploymentType, Prisma, Role } from "@prisma/client";
+import { EmployeeStatus, EmploymentType, Prisma, Role } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import bcrypt from "bcryptjs";
 import { randomUUID } from "node:crypto";
-import { getActiveUser } from "@/lib/auth";
-import { getActiveCompanyId } from "@/lib/company";
+import { assignableRoles, canChangeRole, getActiveUser, isHRAdmin, roleLabels } from "@/lib/auth";
+import { getActiveCompanyId, WORKFORCE_STATUSES } from "@/lib/company";
 import { readCsvRecords } from "@/lib/csv";
 import { readUploadedCsv, type ImportIssue, type ImportResult } from "@/lib/import-result";
+import { BLOOD_GROUPS, isSeparated, toDateInputValue } from "@/lib/employee-profile";
+import { readEmployeeImages, saveEmployeeImages } from "@/lib/employee-files";
+import { calculateSettlement, parseDateInput, type ReleaseInput } from "@/lib/settlement";
 
 export type EmployeeActionResult = { ok: true } | { ok: false; error: string };
 
@@ -17,6 +20,36 @@ const duplicateFieldLabels: Record<string, string> = {
   employeeCode: "employee code",
   biometricId: "biometric / device ID",
 };
+
+const ROLES = Object.values(Role);
+const MAX_REPORTING_DEPTH = 50;
+
+/**
+ * Checks a "Reports to" choice. The manager must be on the workforce (unless unchanged), cannot be the employee,
+ * and cannot be someone who already reports up to the employee, which would make a reporting loop.
+ */
+async function validateManager(managerId: string | null, employeeId: string | null, currentManagerId: string | null = null) {
+  if (!managerId) return null;
+  if (managerId === employeeId) return "An employee cannot report to themselves";
+
+  const manager = await prisma.employee.findUnique({ where: { id: managerId }, select: { status: true, managerId: true } });
+  if (!manager) return "Selected manager no longer exists";
+  if (managerId !== currentManagerId && !WORKFORCE_STATUSES.includes(manager.status)) {
+    return "Selected manager is no longer on the workforce";
+  }
+
+  if (employeeId) {
+    let cursor = manager.managerId;
+    for (let depth = 0; cursor && depth < MAX_REPORTING_DEPTH; depth++) {
+      if (cursor === employeeId) return "That manager already reports to this employee; choosing them would create a reporting loop";
+      cursor = (await prisma.employee.findUnique({ where: { id: cursor }, select: { managerId: true } }))?.managerId ?? null;
+    }
+  }
+  return null;
+}
+
+const parseRole = (value: FormDataEntryValue | null): Role | null =>
+  typeof value === "string" && (ROLES as string[]).includes(value) ? (value as Role) : null;
 
 export async function createEmployee(formData: FormData): Promise<EmployeeActionResult> {
   const user = await getActiveUser();
@@ -38,6 +71,18 @@ export async function createEmployee(formData: FormData): Promise<EmployeeAction
   if (!email || !firstName || !lastName || !employeeCode) {
     return { ok: false, error: "Required fields are missing" };
   }
+
+  const role = formData.has("role") ? parseRole(formData.get("role")) : Role.EMPLOYEE;
+  if (!role) return { ok: false, error: "Select a valid system role" };
+  if (!assignableRoles(user.role).includes(role)) {
+    return { ok: false, error: `You cannot grant the ${roleLabels[role]} role` };
+  }
+  const managerId = (formData.get("managerId") as string | null) || null;
+  const managerError = await validateManager(managerId, null);
+  if (managerError) return { ok: false, error: managerError };
+
+  const images = await readEmployeeImages(formData);
+  if (!images.ok) return images;
 
   if (companyId) {
     const company = await prisma.company.findUnique({ where: { id: companyId }, select: { id: true } });
@@ -61,11 +106,11 @@ export async function createEmployee(formData: FormData): Promise<EmployeeAction
         data: {
           email,
           passwordHash,
-          role: "EMPLOYEE",
+          role,
         },
       });
 
-      await tx.employee.create({
+      const employee = await tx.employee.create({
         data: {
           userId: user.id,
           employeeCode,
@@ -76,12 +121,19 @@ export async function createEmployee(formData: FormData): Promise<EmployeeAction
           phone,
           departmentId,
           designationId: designationId || null,
+          managerId,
           employmentType,
           status: "ACTIVE",
           joiningDate: new Date(),
         },
+        select: { id: true },
       });
-    });
+
+      if (images.images.length > 0) {
+        const urls = await saveEmployeeImages(tx, employee.id, images.images);
+        await tx.employee.update({ where: { id: employee.id }, data: urls });
+      }
+    }, { timeout: 15_000 });
   } catch (err) {
     if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
       const fields = (err.meta?.target as string[] | undefined) ?? [];
@@ -269,4 +321,212 @@ export async function importEmployeesCsv(formData: FormData): Promise<ImportResu
     stats: [{ label: "Employees created", value: rows.length }],
     issues: [],
   };
+}
+
+const EMPLOYMENT_TYPES = Object.values(EmploymentType);
+/** Statuses the edit form may set. TERMINATED / RESIGNED only come from processing a release. */
+const EDITABLE_STATUSES: EmployeeStatus[] = [EmployeeStatus.ACTIVE, EmployeeStatus.PROBATION, EmployeeStatus.NOTICE_PERIOD];
+
+const textField = (formData: FormData, name: string) => (formData.get(name) as string | null)?.trim() || null;
+
+export async function updateEmployee(employeeId: string, formData: FormData): Promise<EmployeeActionResult> {
+  const user = await getActiveUser();
+  if (!isHRAdmin(user.role)) {
+    return { ok: false, error: "You do not have permission to edit employees" };
+  }
+
+  const existing = await prisma.employee.findUnique({
+    where: { id: employeeId },
+    select: { status: true, userId: true, managerId: true, photoUrl: true, nidScanUrl: true, user: { select: { role: true } } },
+  });
+  if (!existing) return { ok: false, error: "This employee no longer exists" };
+
+  const firstName = textField(formData, "firstName");
+  const lastName = textField(formData, "lastName");
+  const employeeCode = textField(formData, "employeeCode");
+  const email = textField(formData, "email");
+  const companyId = textField(formData, "companyId");
+  const departmentId = textField(formData, "departmentId");
+  const designationId = textField(formData, "designationId");
+  const employmentType = formData.get("employmentType") as EmploymentType;
+  const status = formData.get("status") as EmployeeStatus;
+  const joiningDate = parseDateInput(formData.get("joiningDate") as string | null);
+  const dateOfBirthRaw = textField(formData, "dateOfBirth");
+  const dateOfBirth = dateOfBirthRaw ? parseDateInput(dateOfBirthRaw) : null;
+  const bloodGroup = textField(formData, "bloodGroup");
+
+  if (!firstName || !lastName || !employeeCode) {
+    return { ok: false, error: "First name, last name and employee code are required" };
+  }
+  if (existing.userId && !email) return { ok: false, error: "Work email is required" };
+  if (email && !EMAIL_PATTERN.test(email)) return { ok: false, error: "Enter a valid work email" };
+  if (!joiningDate) return { ok: false, error: "Enter a valid joining date" };
+  if (dateOfBirthRaw && !dateOfBirth) return { ok: false, error: "Enter a valid date of birth" };
+  if (!EMPLOYMENT_TYPES.includes(employmentType)) return { ok: false, error: "Select an employment type" };
+  // A released employee may keep their status; any change must be to an active status (reinstatement).
+  if (!EDITABLE_STATUSES.includes(status) && status !== existing.status) {
+    return { ok: false, error: "Terminated / Resigned is set by processing a release from the employee profile" };
+  }
+  if (bloodGroup && !(BLOOD_GROUPS as readonly string[]).includes(bloodGroup)) {
+    return { ok: false, error: "Select a valid blood group" };
+  }
+
+  // The form omits "role" when the select is locked (no login, own record, or an account above the admin's grant);
+  // a missing value keeps the current role.
+  const currentRole = existing.user?.role ?? null;
+  const requestedRole = formData.has("role") ? parseRole(formData.get("role")) : currentRole;
+  if (formData.has("role") && !requestedRole) return { ok: false, error: "Select a valid system role" };
+  const roleChanged = currentRole !== null && requestedRole !== null && requestedRole !== currentRole;
+  if (roleChanged) {
+    if (user.employeeId === employeeId) return { ok: false, error: "You cannot change your own role" };
+    if (!canChangeRole(user.role, currentRole, requestedRole)) {
+      return {
+        ok: false,
+        error: assignableRoles(user.role).includes(currentRole)
+          ? `You cannot grant the ${roleLabels[requestedRole]} role`
+          : `Only a Super Admin can change a ${roleLabels[currentRole]} account`,
+      };
+    }
+  }
+
+  const managerId = textField(formData, "managerId");
+  const managerError = await validateManager(managerId, employeeId, existing.managerId);
+  if (managerError) return { ok: false, error: managerError };
+
+  const images = await readEmployeeImages(formData);
+  if (!images.ok) return images;
+
+  if (companyId) {
+    const company = await prisma.company.findUnique({ where: { id: companyId }, select: { id: true } });
+    if (!company) return { ok: false, error: "Selected company no longer exists" };
+  }
+  if (departmentId) {
+    const department = await prisma.department.findUnique({ where: { id: departmentId }, select: { companyId: true } });
+    if (!department) return { ok: false, error: "Selected department no longer exists" };
+    if (department.companyId && department.companyId !== companyId) {
+      return { ok: false, error: "Selected department belongs to a different company" };
+    }
+  }
+
+  try {
+    await prisma.$transaction(async (tx) => {
+      // Only a newly picked or removed image changes its URL; an untouched picker keeps the stored one.
+      const imageUrls = await saveEmployeeImages(tx, employeeId, images.images, existing);
+      await tx.employee.update({
+        where: { id: employeeId },
+        data: {
+          firstName,
+          lastName,
+          employeeCode,
+          biometricId: textField(formData, "biometricId"),
+          companyId,
+          departmentId,
+          designationId,
+          phone: textField(formData, "phone"),
+          employmentType,
+          status,
+          joiningDate,
+          gender: textField(formData, "gender"),
+          dateOfBirth,
+          nationalId: textField(formData, "nationalId"),
+          address: textField(formData, "address"),
+          bloodGroup,
+          ...imageUrls,
+          referenceDetails: textField(formData, "referenceDetails"),
+          managerId,
+        },
+      });
+      if (existing.userId && email) {
+        // Reinstating a released employee (back to an active status) restores the login the release revoked.
+        const reinstated = isSeparated(existing.status) && !isSeparated(status);
+        await tx.user.update({
+          where: { id: existing.userId },
+          data: { email, ...(roleChanged ? { role: requestedRole } : {}), ...(reinstated ? { isActive: true } : {}) },
+        });
+      }
+    }, { timeout: 15_000 });
+  } catch (err) {
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
+      const fields = (err.meta?.target as string[] | undefined) ?? [];
+      const label = fields.map((f) => duplicateFieldLabels[f] ?? f).join(", ") || "value";
+      return { ok: false, error: `Another employee already uses this ${label}` };
+    }
+    throw err;
+  }
+
+  revalidatePath("/dashboard", "layout");
+  return { ok: true };
+}
+
+/**
+ * Confirms a release: stores the full & final settlement and sets the status to TERMINATED or RESIGNED.
+ * Every amount is recomputed here, and the joining date is read from the employee record, never taken from the browser.
+ */
+export async function releaseEmployee(employeeId: string, input: ReleaseInput): Promise<EmployeeActionResult> {
+  const user = await getActiveUser();
+  if (!isHRAdmin(user.role)) {
+    return { ok: false, error: "You do not have permission to release employees" };
+  }
+  if (user.employeeId === employeeId) return { ok: false, error: "You cannot process your own release" };
+
+  const employee = await prisma.employee.findUnique({ where: { id: employeeId }, select: { status: true, joiningDate: true } });
+  if (!employee) return { ok: false, error: "This employee no longer exists" };
+  if (isSeparated(employee.status)) return { ok: false, error: "This employee has already been released" };
+
+  if (input.separationType !== "TERMINATED" && input.separationType !== "RESIGNED") {
+    return { ok: false, error: "Select a separation type" };
+  }
+  // Org-local calendar day of the stored joining date, the same value the calculator displayed.
+  const joiningDateValue = toDateInputValue(employee.joiningDate);
+  const joiningDate = parseDateInput(joiningDateValue)!;
+  const releaseDate = parseDateInput(input.releaseDate);
+  if (!releaseDate) return { ok: false, error: "Enter a valid release date" };
+  if (releaseDate < joiningDate) return { ok: false, error: "Release date cannot be before the joining date" };
+
+  const amounts = [input.basicSalary, input.unusedLeaveDays, input.unpaidSalaryDays, input.deductions];
+  if (amounts.some((n) => typeof n !== "number" || !Number.isFinite(n) || n < 0)) {
+    return { ok: false, error: "Salary, days and deductions must be zero or positive numbers" };
+  }
+  if (input.basicSalary <= 0) return { ok: false, error: "Enter the basic salary" };
+
+  const result = calculateSettlement({ ...input, joiningDate: joiningDateValue });
+
+  // The status guard sits inside the transaction, so two concurrent confirmations cannot both store a settlement.
+  const released = await prisma.$transaction(async (tx) => {
+    const { count } = await tx.employee.updateMany({
+      where: { id: employeeId, status: { notIn: [EmployeeStatus.TERMINATED, EmployeeStatus.RESIGNED] } },
+      data: { status: input.separationType },
+    });
+    if (count === 0) return false;
+    // Revoke login access with the release; reinstating the employee from Edit Profile restores it.
+    await tx.user.updateMany({ where: { employee: { id: employeeId } }, data: { isActive: false } });
+    await tx.finalSettlement.create({
+      data: {
+        employeeId,
+        separationType: input.separationType,
+        joiningDate,
+        releaseDate,
+        serviceDays: result.totalDays,
+        payableYears: result.serviceBenefitRule.years,
+        serviceBenefitDaysPerYear: result.serviceBenefitRule.daysPerYear,
+        basicSalary: input.basicSalary,
+        noticePayApplied: result.noticePayApplied,
+        serviceBenefitApplied: input.includeServiceBenefit === true,
+        unusedLeaveDays: input.unusedLeaveDays,
+        unpaidSalaryDays: input.unpaidSalaryDays,
+        noticePay: result.noticePay,
+        serviceBenefit: result.serviceBenefit,
+        leaveEncashment: result.leaveEncashment,
+        unpaidSalary: result.unpaidSalary,
+        deductions: result.deductions,
+        netPayable: result.netPayable,
+        processedById: user.id,
+      },
+    });
+    return true;
+  });
+  if (!released) return { ok: false, error: "This employee has already been released" };
+
+  revalidatePath("/dashboard", "layout");
+  return { ok: true };
 }

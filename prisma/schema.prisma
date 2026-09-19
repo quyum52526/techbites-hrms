@@ -33,6 +33,12 @@ enum EmployeeStatus {
   RESIGNED
 }
 
+// How an employee left; drives notice pay in the final settlement. Values match EmployeeStatus.
+enum SeparationType {
+  TERMINATED
+  RESIGNED
+}
+
 enum AttendanceStatus {
   PRESENT
   LATE
@@ -145,6 +151,10 @@ model Employee {
   gender           String?
   dateOfBirth      DateTime?
   address          String?
+  bloodGroup       String?         // e.g. "A+", "O-"
+  photoUrl         String?         // /api/files/<id> for an uploaded image, or a site-relative path / http(s) URL
+  nidScanUrl       String?         // scanned National ID card; same forms as photoUrl
+  referenceDetails String?         // free text: referee names, relation and contact numbers
 
   joiningDate      DateTime
   employmentType   EmploymentType  @default(FULL_TIME)
@@ -164,9 +174,63 @@ model Employee {
   salaryStructure  SalaryStructure?
   payrollRecords   PayrollRecord[]
   appraisalReviews AppraisalReview[]
+  settlements      FinalSettlement[]
+  files            StoredFile[]
 
   createdAt        DateTime        @default(now())
   updatedAt        DateTime        @updatedAt
+}
+
+// Uploaded employee images (photo, NID scan), served only through the access-checked /api/files/[id] route.
+// Temporary store in Postgres until object storage (e.g. Vercel Blob) is provisioned; images are resized in the
+// browser before upload, so rows stay small.
+model StoredFile {
+  id          String    @id @default(cuid())
+  employeeId  String?
+  employee    Employee? @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  kind        String    // "PHOTO" | "NID_SCAN"
+  contentType String
+  size        Int
+  data        Bytes
+  createdAt   DateTime  @default(now())
+
+  @@index([employeeId])
+}
+
+// ========================================
+// SEPARATION & FINAL SETTLEMENT
+// ========================================
+// Full & final settlement taken when an employee is released (Bangladesh Labour Act 2006).
+// Every input and computed line is snapshotted, so a later salary change never rewrites a processed release.
+model FinalSettlement {
+  id                    String         @id @default(cuid())
+  employeeId            String
+  employee              Employee       @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  separationType        SeparationType
+  joiningDate           DateTime       @db.Date
+  releaseDate           DateTime       @db.Date
+  serviceDays           Int
+  payableYears          Int            // years the service benefit was paid for
+  serviceBenefitDaysPerYear Int        @default(0) // 30 (Section 26 / 27 10+ yr), 14 (Section 27 5-10 yr) or 0
+  basicSalary           Float
+
+  noticePayApplied      Boolean
+  serviceBenefitApplied Boolean
+  unusedLeaveDays       Float          @default(0)
+  unpaidSalaryDays      Float          @default(0)
+
+  noticePay             Float          @default(0)
+  serviceBenefit        Float          @default(0)
+  leaveEncashment       Float          @default(0)
+  unpaidSalary          Float          @default(0)
+  deductions            Float          @default(0)
+  netPayable            Float
+
+  processedById         String?        // User.id of the HR/admin who confirmed the release
+  createdAt             DateTime       @default(now())
+
+  @@index([employeeId])
 }
 
 // ========================================

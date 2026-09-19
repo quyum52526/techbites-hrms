@@ -3,13 +3,14 @@
 import { AppraisalStatus, Role } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
-import { getActiveUser } from "@/lib/auth";
+import { getActiveUser, isTeamLead } from "@/lib/auth";
+import { PERFORMANCE_ROLES } from "@/lib/auth-shared";
 
 const privilegedRoles: Role[] = [Role.SUPER_ADMIN, Role.HR_ADMIN];
 
 async function requirePerformanceAccess() {
   const user = await getActiveUser();
-  if (!privilegedRoles.includes(user.role) && user.role !== Role.TEAM_LEADER && user.role !== Role.MANAGER) {
+  if (!PERFORMANCE_ROLES.includes(user.role)) {
     throw new Error("You do not have permission to access performance reviews");
   }
   return user;
@@ -41,16 +42,21 @@ export async function createAppraisalCycle(data: {
   });
 }
 
+/**
+ * Reviews in a cycle. Team leads always get their own direct reports: this is a server action the browser can call
+ * with any arguments, so `managerEmployeeId` is honoured only for HR admins (to view one manager's team).
+ */
 export async function getReviewsForCycle(cycleId: string, managerEmployeeId?: string) {
   const user = await requirePerformanceAccess();
   const cycle = await prisma.appraisalCycle.findUnique({ where: { id: cycleId } });
   if (!cycle) throw new Error("Appraisal cycle not found");
 
   let employeeFilter = {};
-  if (user.role === Role.TEAM_LEADER || user.role === Role.MANAGER) {
-    const managerId = managerEmployeeId ?? user.employeeId;
-    if (!managerId) throw new Error("Team leader profile is not linked to an employee");
-    employeeFilter = { managerId };
+  if (isTeamLead(user.role)) {
+    if (!user.employeeId) throw new Error("Team leader profile is not linked to an employee");
+    employeeFilter = { managerId: user.employeeId };
+  } else if (managerEmployeeId) {
+    employeeFilter = { managerId: managerEmployeeId };
   }
 
   const employees = await prisma.employee.findMany({
@@ -79,7 +85,7 @@ export async function submitEmployeeReview(
     include: { cycle: true, employee: true },
   });
   if (!review) throw new Error("Review not found");
-  if ((user.role === Role.TEAM_LEADER || user.role === Role.MANAGER) && review.employee.managerId !== user.employeeId) {
+  if (isTeamLead(user.role) && review.employee.managerId !== user.employeeId) {
     throw new Error("You can only review direct reports");
   }
 

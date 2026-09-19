@@ -6,6 +6,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { getActiveUser } from "@/lib/auth";
 import { ACTIVE_COMPANY_COOKIE } from "@/lib/company";
+import { isSafeAssetUrl } from "@/lib/employee-profile";
 
 const privilegedRoles: Role[] = [Role.SUPER_ADMIN, Role.HR_ADMIN];
 
@@ -70,18 +71,6 @@ function companyInputFromFormData(formData: FormData): CompanyInput {
   };
 }
 
-/** Accepts a site-relative path (/logos/tbm.png) or an absolute http(s) URL; anything else (javascript:, data:, //host) is rejected. */
-function isSafeLogoUrl(value: string) {
-  if (value.length > 2048) return false;
-  if (value.startsWith("/")) return !value.startsWith("//");
-  try {
-    const url = new URL(value);
-    return url.protocol === "https:" || url.protocol === "http:";
-  } catch {
-    return false;
-  }
-}
-
 function parseCompanyInput(input: CompanyInput): { ok: true; data: CompanyData } | { ok: false; error: string } {
   const name = input.name?.trim();
   const code = input.code?.trim().toUpperCase();
@@ -95,7 +84,7 @@ function parseCompanyInput(input: CompanyInput): { ok: true; data: CompanyData }
   if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     return { ok: false, error: "Enter a valid company email address" };
   }
-  if (logoUrl && !isSafeLogoUrl(logoUrl)) {
+  if (logoUrl && !isSafeAssetUrl(logoUrl)) {
     return { ok: false, error: "Logo URL must start with / (e.g. /logos/tbm.png) or http(s)://" };
   }
 

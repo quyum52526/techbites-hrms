@@ -5,23 +5,29 @@ import { UserPlus } from "lucide-react";
 import { createEmployee } from "@/app/actions/employees";
 import Modal, { ModalActions } from "@/components/ui/Modal";
 import FormField from "@/components/ui/FormField";
+import ImageUploadField from "@/components/ui/ImageUploadField";
+import OrgUnitFields from "@/components/dashboard/OrgUnitFields";
+import AccessFields from "@/components/dashboard/AccessFields";
+import type { Role } from "@prisma/client";
+import type { ManagerOption } from "@/lib/employee-edit";
+import { NID_SCAN_MAX_PX, PHOTO_MAX_PX } from "@/lib/employee-profile";
 import { controlClass, primaryButtonClass, secondaryButtonClass } from "@/components/ui/styles";
 
 interface Props {
   companies: { id: string; name: string; code: string }[];
   departments: { id: string; name: string; companyId: string | null }[];
   designations: { id: string; title: string }[];
+  managers: ManagerOption[];
+  /** Role of the signed-in admin; decides which roles the new login can be given. */
+  actorRole: Role;
   activeCompanyId: string | null;
 }
 
-export default function AddEmployeeModal({ companies, departments, designations, activeCompanyId }: Props) {
+export default function AddEmployeeModal({ companies, departments, designations, managers, actorRole, activeCompanyId }: Props) {
   const [isOpen, setIsOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [companyId, setCompanyId] = useState(activeCompanyId ?? "");
-
-  // Shared departments (no company) are always selectable.
-  const availableDepartments = departments.filter((d) => !d.companyId || d.companyId === companyId);
 
   const openModal = () => {
     setCompanyId(activeCompanyId ?? "");
@@ -98,30 +104,9 @@ export default function AddEmployeeModal({ companies, departments, designations,
             </FormField>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <FormField label="Department">
-              {/* key resets the choice when the company (and so the department list) changes */}
-              <select key={companyId} name="departmentId" className={controlClass}>
-                <option value="">Select department</option>
-                {availableDepartments.map((d) => (
-                  <option key={d.id} value={d.id}>
-                    {d.name}
-                    {d.companyId ? "" : " (Shared)"}
-                  </option>
-                ))}
-              </select>
-            </FormField>
-            <FormField label="Designation">
-              <select name="designationId" className={controlClass}>
-                <option value="">Select designation</option>
-                {designations.map((des) => (
-                  <option key={des.id} value={des.id}>
-                    {des.title}
-                  </option>
-                ))}
-              </select>
-            </FormField>
-          </div>
+          <OrgUnitFields companyId={companyId} companies={companies} departments={departments} designations={designations} />
+
+          <AccessFields actorRole={actorRole} managers={managers} />
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <FormField label="Phone number">
@@ -135,6 +120,11 @@ export default function AddEmployeeModal({ companies, departments, designations,
                 <option value="INTERN">Intern</option>
               </select>
             </FormField>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <ImageUploadField name="photo" label="Photo" shape="circle" maxDimension={PHOTO_MAX_PX} />
+            <ImageUploadField name="nidScan" label="NID scan" hint="Front of the National ID card" maxDimension={NID_SCAN_MAX_PX} />
           </div>
 
           {error && (

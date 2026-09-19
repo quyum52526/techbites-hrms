@@ -2,8 +2,10 @@ import { prisma } from "@/lib/prisma";
 import { createDepartment, createDesignation } from "@/app/actions/departments";
 import { Building2, Briefcase, Plus, Users } from "lucide-react";
 import { getActiveCompanyId, employeeScope, departmentScope } from "@/lib/company";
+import { requireHRAdmin } from "@/lib/auth";
 
 export default async function DepartmentsPage() {
+  await requireHRAdmin();
   const activeCompanyId = await getActiveCompanyId();
 
   const [departments, companies, designations] = await Promise.all([
