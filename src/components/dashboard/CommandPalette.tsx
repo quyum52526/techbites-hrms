@@ -4,9 +4,9 @@ import { useEffect, useId, useRef, useState, useSyncExternalStore } from "react"
 import { useRouter } from "next/navigation";
 import { Search, CornerDownLeft, UserRound, CalendarClock, Upload, UsersRound, UserX, AlarmClock, type LucideIcon } from "lucide-react";
 import { clsx } from "clsx";
-import type { Role } from "@prisma/client";
 import { navItems } from "@/components/dashboard/Sidebar";
 import { searchEmployees, type EmployeeSearchHit } from "@/app/actions/search";
+import type { SessionRole } from "@/lib/auth-shared";
 
 type Group = "Actions" | "Pages" | "Employees";
 type Command = { id: string; group: Group; label: string; hint?: string; href: string; icon: LucideIcon };
@@ -34,7 +34,7 @@ function fuzzyScore(text: string, query: string): number | null {
 const subscribeNoop = () => () => {};
 const detectMac = () => /Mac|iPhone|iPad/.test(navigator.platform);
 
-export default function CommandPalette({ role }: { role: Role }) {
+export default function CommandPalette({ role }: { role: SessionRole }) {
   const router = useRouter();
   const dialogRef = useRef<HTMLDialogElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -46,10 +46,12 @@ export default function CommandPalette({ role }: { role: Role }) {
   const [active, setActive] = useState(0);
   const [hits, setHits] = useState<{ query: string; results: EmployeeSearchHit[] }>({ query: "", results: [] });
 
-  const isHr = role === "SUPER_ADMIN" || role === "HR_ADMIN";
+  const isGuest = role === "GUEST";
+  // Guests search and browse like HR but get no shortcuts that lead to a change (import, apply for leave).
+  const isHr = role === "SUPER_ADMIN" || role === "HR_ADMIN" || isGuest;
   // Only roles that see other people's attendance (HR, team leads) get the team-wide shortcuts.
   const canViewAttendance = isHr || role === "TEAM_LEADER" || role === "MANAGER";
-  const canApplyLeave = navItems.some((item) => item.href === "/dashboard/leaves" && item.roles.includes(role));
+  const canApplyLeave = !isGuest && navItems.some((item) => item.href === "/dashboard/leaves" && item.roles.includes(role));
   const trimmed = query.trim();
 
   const open = () => {
@@ -98,7 +100,7 @@ export default function CommandPalette({ role }: { role: Role }) {
     ...(isHr
       ? [
           { id: "act-pending", group: "Actions" as const, label: "Review pending leave requests", href: "/dashboard/leaves?status=PENDING", icon: CalendarClock },
-          { id: "act-punch-import", group: "Actions" as const, label: "Import biometric punch log", href: "/dashboard/attendance", icon: Upload },
+          ...(isGuest ? [] : [{ id: "act-punch-import", group: "Actions" as const, label: "Import biometric punch log", href: "/dashboard/attendance", icon: Upload }]),
         ]
       : []),
     ...(canViewAttendance

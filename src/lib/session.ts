@@ -7,6 +7,9 @@
 export const SESSION_COOKIE = "techbites-session";
 export const SESSION_MAX_AGE_SECONDS = 7 * 24 * 60 * 60;
 
+/** Session uid of a read-only guest. Never a real User id (those are cuids). */
+export const GUEST_SESSION_UID = "guest";
+
 type SessionPayload = { uid: string; exp: number };
 
 const DEV_FALLBACK_SECRET = "techbites-dev-only-session-secret-do-not-use-in-production";
@@ -40,8 +43,8 @@ const signingKey = () =>
     "verify",
   ]));
 
-export async function createSessionToken(userId: string) {
-  const payload: SessionPayload = { uid: userId, exp: Math.floor(Date.now() / 1000) + SESSION_MAX_AGE_SECONDS };
+export async function createSessionToken(userId: string, maxAgeSeconds = SESSION_MAX_AGE_SECONDS) {
+  const payload: SessionPayload = { uid: userId, exp: Math.floor(Date.now() / 1000) + maxAgeSeconds };
   const body = toBase64Url(encoder.encode(JSON.stringify(payload)));
   const signature = new Uint8Array(await crypto.subtle.sign("HMAC", await signingKey(), encoder.encode(body)));
   return `${body}.${toBase64Url(signature)}`;

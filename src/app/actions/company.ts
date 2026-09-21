@@ -4,7 +4,7 @@ import { CompanyType, Prisma, Role } from "@prisma/client";
 import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
-import { getActiveUser } from "@/lib/auth";
+import { canViewAsHR, getActiveUser, requireWriteAccess } from "@/lib/auth";
 import { ACTIVE_COMPANY_COOKIE, canSwitchCompanyForUser, getAccessibleCompanyIds } from "@/lib/company";
 import { isSafeAssetUrl } from "@/lib/employee-profile";
 
@@ -12,8 +12,16 @@ const privilegedRoles: Role[] = [Role.SUPER_ADMIN, Role.HR_ADMIN];
 
 export type CompanyActionResult = { ok: true } | { ok: false; error: string };
 
-async function requireCompanyAccess() {
+/** Viewing the company list: HR admins, and guests (who only ever see their showcase company). */
+async function requireCompanyViewAccess() {
   const user = await getActiveUser();
+  if (!canViewAsHR(user.role)) throw new Error("You do not have permission to view companies");
+  return user;
+}
+
+/** Changing companies or the active-company filter: HR admins only; guests are refused first. */
+async function requireCompanyAccess() {
+  const user = await requireWriteAccess();
   if (!privilegedRoles.includes(user.role)) {
     throw new Error("You do not have permission to manage companies");
   }
@@ -30,7 +38,7 @@ async function requireCompanyMutationAccess(companyId?: string) {
 }
 
 export async function getCompanies() {
-  const user = await requireCompanyAccess();
+  const user = await requireCompanyViewAccess();
   const accessibleIds = await getAccessibleCompanyIds(user);
   const companies = await prisma.company.findMany({
     where: accessibleIds ? { id: { in: accessibleIds } } : undefined,

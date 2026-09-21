@@ -6,11 +6,12 @@ import { Banknote, BarChart3, TrendingUp, Users, CalendarCheck, Building, Shield
 import { getActiveUser, type ActiveUser } from "@/lib/auth";
 import { canSwitchCompanyForUser, departmentScope, employeeScope, getActiveCompanyId, getOwnCompanyId } from "@/lib/company";
 import { formatMoney } from "@/lib/payroll";
+import type { SessionRole } from "@/lib/auth-shared";
 import StatCard from "@/components/dashboard/StatCard";
 import { cardClass, secondaryButtonClass } from "@/components/ui/styles";
 
 /** Roles allowed to see executive and payroll totals. Keep in sync with the Reports entry in Sidebar.tsx. */
-const REPORT_ROLES: Role[] = [Role.SUPER_ADMIN, Role.HR_ADMIN, Role.MANAGER];
+const REPORT_ROLES: readonly SessionRole[] = [Role.SUPER_ADMIN, Role.HR_ADMIN, Role.MANAGER, "GUEST"];
 type ReportScope = { allowed: true; companyId: string | null } | { allowed: false; reason: string };
 
 /**
@@ -22,6 +23,8 @@ async function getReportScope(user: ActiveUser): Promise<ReportScope> {
     return { allowed: false, reason: "Reports & BI shows company-wide payroll and workforce totals, so it is limited to administrators and managers." };
   }
   if (await canSwitchCompanyForUser(user)) return { allowed: true, companyId: await getActiveCompanyId() };
+  // A guest's session carries the showcase company; it has no employee record to read one from.
+  if (user.role === "GUEST") return user.companyId ? { allowed: true, companyId: user.companyId } : { allowed: false, reason: "Guest mode is not configured." };
 
   const companyId = await getOwnCompanyId(user.employeeId);
   if (!companyId) {

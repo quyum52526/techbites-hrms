@@ -3,18 +3,25 @@
 import { AppraisalStatus, Prisma, Role } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
-import { getActiveUser, isTeamLead } from "@/lib/auth";
+import { getActiveUser, isTeamLead, requireWriteAccess, type WritableUser } from "@/lib/auth";
 import { PERFORMANCE_ROLES } from "@/lib/auth-shared";
 import { employeeScope, getActiveCompanyId } from "@/lib/company";
 
 const privilegedRoles: Role[] = [Role.SUPER_ADMIN, Role.HR_ADMIN];
 
+/** Viewing cycles and reviews: guests included. Writes go through `requirePerformanceWriteAccess`. */
 async function requirePerformanceAccess() {
   const user = await getActiveUser();
   if (!PERFORMANCE_ROLES.includes(user.role)) {
     throw new Error("You do not have permission to access performance reviews");
   }
   return user;
+}
+
+/** Refuses guests before the role check, so their view access never becomes write access. */
+async function requirePerformanceWriteAccess(): Promise<WritableUser> {
+  await requireWriteAccess();
+  return (await requirePerformanceAccess()) as WritableUser;
 }
 
 export async function getAppraisalCycles() {
@@ -28,7 +35,7 @@ export async function createAppraisalCycle(data: {
   startDate: Date;
   endDate: Date;
 }) {
-  const user = await requirePerformanceAccess();
+  const user = await requirePerformanceWriteAccess();
   if (!privilegedRoles.includes(user.role)) throw new Error("Only HR administrators can create cycles");
   return prisma.$transaction(async (tx) => {
     const cycle = await tx.appraisalCycle.create({ data });
@@ -82,7 +89,7 @@ export async function submitPerformanceReview(
   employeeId: string,
   metrics: { productivity: number; qualityOfWork: number; collaboration: number; feedback?: string },
 ) {
-  const user = await requirePerformanceAccess();
+  const user = await requirePerformanceWriteAccess();
   const [cycle, employee] = await Promise.all([
     prisma.appraisalCycle.findUnique({ where: { id: cycleId } }),
     prisma.employee.findUnique({ where: { id: employeeId }, select: { id: true, managerId: true, companyId: true } }),

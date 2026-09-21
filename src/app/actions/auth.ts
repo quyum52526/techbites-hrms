@@ -4,10 +4,13 @@ import bcrypt from "bcryptjs";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
+import { getActiveUser } from "@/lib/auth";
 import { ACTIVE_COMPANY_COOKIE } from "@/lib/company";
-import { createSessionToken, safeNextPath, SESSION_COOKIE, sessionCookieOptions } from "@/lib/session";
+import { createSessionToken, GUEST_SESSION_UID, safeNextPath, SESSION_COOKIE, sessionCookieOptions } from "@/lib/session";
+import { GUEST_SESSION_MAX_AGE_SECONDS, guestCompanyId, guestModeEnabled } from "@/lib/guest";
 
 export type SignInState = { error: string; email: string } | null;
+export type GuestSignInState = { error: string } | null;
 
 const INVALID_CREDENTIALS = "Invalid work email or password";
 
@@ -41,6 +44,25 @@ export async function signIn(_previous: SignInState, formData: FormData): Promis
   redirect(safeNextPath(formData.get("next") as string | null));
 }
 
+/**
+ * Read-only guest session: no password, no User row. The cookie is as protected as a normal session (httpOnly,
+ * SameSite=Lax, Secure in production) but expires sooner, and every server action refuses to write for it.
+ */
+export async function signInAsGuest(): Promise<GuestSignInState> {
+  const companyId = guestCompanyId();
+  if (!guestModeEnabled() || !companyId) return { error: "Guest access is not available right now." };
+  const company = await prisma.company.findUnique({ where: { id: companyId }, select: { id: true } });
+  if (!company) return { error: "Guest access is not available right now." };
+
+  const cookieStore = await cookies();
+  cookieStore.set(SESSION_COOKIE, await createSessionToken(GUEST_SESSION_UID, GUEST_SESSION_MAX_AGE_SECONDS), {
+    ...sessionCookieOptions,
+    maxAge: GUEST_SESSION_MAX_AGE_SECONDS,
+  });
+  cookieStore.delete(ACTIVE_COMPANY_COOKIE);
+  redirect("/dashboard");
+}
+
 export async function signOut() {
   const cookieStore = await cookies();
   cookieStore.delete(SESSION_COOKIE);
@@ -54,6 +76,8 @@ export async function signOut() {
  */
 export async function switchAccount(formData: FormData) {
   if (process.env.NODE_ENV === "production") throw new Error("Account switching is disabled in production");
+  // A guest signs in with a real account through the login page instead.
+  if ((await getActiveUser()).role === "GUEST") throw new Error("Account switching is disabled in Guest Mode");
 
   const userId = String(formData.get("userId") ?? "");
   const user = await prisma.user.findFirst({ where: { id: userId, isActive: true }, select: { id: true } });

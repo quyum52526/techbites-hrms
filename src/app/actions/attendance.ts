@@ -3,7 +3,8 @@
 import { AttendanceStatus, Prisma, Role } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
-import { getActiveUser } from "@/lib/auth";
+import { getWritableUser, requireWriteAccess } from "@/lib/auth";
+import { GUEST_READ_ONLY_MESSAGE } from "@/lib/auth-shared";
 import { getActiveCompanyId } from "@/lib/company";
 import { readCsvRecords } from "@/lib/csv";
 import { readUploadedCsv, type ImportIssue, type ImportResult } from "@/lib/import-result";
@@ -17,7 +18,7 @@ import {
 
 /** Web punch for the signed-in user's own employee record; the client never chooses whose attendance it marks. */
 export async function toggleAttendance() {
-  const user = await getActiveUser();
+  const user = await requireWriteAccess();
   if (!user.employeeId) {
     throw new Error("Your account is not linked to an employee record");
   }
@@ -69,7 +70,8 @@ const PROTECTED_STATUSES: AttendanceStatus[] = [AttendanceStatus.ON_LEAVE, Atten
 export async function importPunchLogsCsv(formData: FormData): Promise<ImportResult> {
   const fail = (message: string, issues: ImportIssue[] = []): ImportResult => ({ ok: false, message, stats: [], issues });
 
-  const user = await getActiveUser();
+  const user = await getWritableUser();
+  if (!user) return fail(GUEST_READ_ONLY_MESSAGE);
   if (user.role !== Role.SUPER_ADMIN && user.role !== Role.HR_ADMIN) {
     return fail("You do not have permission to import attendance logs");
   }

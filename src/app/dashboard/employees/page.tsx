@@ -6,7 +6,8 @@ import EmployeeAvatar from "@/components/dashboard/EmployeeAvatar";
 import { importEmployeesCsv } from "@/app/actions/employees";
 import { Eye, Mail, Pencil, Phone } from "lucide-react";
 import Link from "next/link";
-import { requireHRAdmin } from "@/lib/auth";
+import { requireHRView } from "@/lib/auth";
+import { GuestLockedButton } from "@/components/ui/ReadOnly";
 import { getAccessibleCompanyIds, getActiveCompanyId, employeeScope } from "@/lib/company";
 import { employeeSearchWhere } from "@/lib/employee-search";
 import { loadEditableEmployee, loadEmployeeFormOptions } from "@/lib/employee-edit";
@@ -18,7 +19,8 @@ const rowActionClass =
 export default async function EmployeesPage({ searchParams }: { searchParams: Promise<{ q?: string; edit?: string }> }) {
   const params = await searchParams;
   const query = params.q?.trim() ?? "";
-  const user = await requireHRAdmin();
+  const user = await requireHRView();
+  const guest = user.role === "GUEST";
   const activeCompanyId = await getActiveCompanyId();
 
   // Search is kept in every row link, so opening and closing the edit modal returns to the same results.
@@ -37,7 +39,7 @@ export default async function EmployeesPage({ searchParams }: { searchParams: Pr
       orderBy: { createdAt: "desc" },
     }),
     loadEmployeeFormOptions(),
-    params.edit ? loadEditableEmployee(params.edit) : null,
+    params.edit && !guest ? loadEditableEmployee(params.edit) : null,
   ]);
   const accessibleCompanyIds = await getAccessibleCompanyIds(user);
   const safeEditing = editing && (!accessibleCompanyIds || (editing.companyId && accessibleCompanyIds.includes(editing.companyId))) ? editing : null;
@@ -55,6 +57,8 @@ export default async function EmployeesPage({ searchParams }: { searchParams: Pr
                   Clear search
                 </Link>
               </>
+            ) : guest ? (
+              "Browse workforce records, departments, and designations"
             ) : (
               "Manage workforce records, departments, and designations"
             )}
@@ -79,14 +83,18 @@ export default async function EmployeesPage({ searchParams }: { searchParams: Pr
             templateHref="/templates/employee-import-template.csv"
             action={importEmployeesCsv}
           />
-          <AddEmployeeModal
-            companies={companies}
-            departments={departments}
-            designations={designations}
-            managers={managers}
-            actorRole={user.role}
-            activeCompanyId={activeCompanyId}
-          />
+          {user.role === "GUEST" ? (
+            <GuestLockedButton className="bg-brand-600 text-white text-xs font-semibold px-4 py-2 rounded-lg shadow-sm">Add Employee</GuestLockedButton>
+          ) : (
+            <AddEmployeeModal
+              companies={companies}
+              departments={departments}
+              designations={designations}
+              managers={managers}
+              actorRole={user.role}
+              activeCompanyId={activeCompanyId}
+            />
+          )}
         </div>
       </div>
 
@@ -156,14 +164,18 @@ export default async function EmployeesPage({ searchParams }: { searchParams: Pr
                       >
                         <Eye className="w-3.5 h-3.5" aria-hidden /> View
                       </Link>
-                      <Link
-                        href={editHref(emp.id)}
-                        scroll={false}
-                        aria-label={`Edit profile of ${emp.firstName} ${emp.lastName}`}
-                        className={rowActionClass}
-                      >
-                        <Pencil className="w-3.5 h-3.5" aria-hidden /> Edit
-                      </Link>
+                      {guest ? (
+                        <GuestLockedButton className={rowActionClass}>Edit</GuestLockedButton>
+                      ) : (
+                        <Link
+                          href={editHref(emp.id)}
+                          scroll={false}
+                          aria-label={`Edit profile of ${emp.firstName} ${emp.lastName}`}
+                          className={rowActionClass}
+                        >
+                          <Pencil className="w-3.5 h-3.5" aria-hidden /> Edit
+                        </Link>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -173,7 +185,7 @@ export default async function EmployeesPage({ searchParams }: { searchParams: Pr
         </div>
       </div>
 
-      {safeEditing && (
+      {safeEditing && user.role !== "GUEST" && (
         <EditEmployeeModal
           key={safeEditing.id}
           employee={safeEditing}

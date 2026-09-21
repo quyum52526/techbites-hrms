@@ -4,7 +4,8 @@ import { notFound } from "next/navigation";
 import { ArrowLeft, Building2, ExternalLink, FileText, Pencil, ReceiptText } from "lucide-react";
 import { clsx } from "clsx";
 import { prisma } from "@/lib/prisma";
-import { getActiveUser, isHRAdmin } from "@/lib/auth";
+import { canViewAsHR, getActiveUser, isHRAdmin } from "@/lib/auth";
+import { GuestLockedButton } from "@/components/ui/ReadOnly";
 import { orgDateOf, orgToday } from "@/lib/attendance-time";
 import { formatMoney } from "@/lib/payroll";
 import { serviceLength } from "@/lib/settlement";
@@ -63,8 +64,10 @@ export default async function EmployeeProfilePage({
 }) {
   const [{ id }, { edit }, user] = await Promise.all([params, searchParams, getActiveUser()]);
   const isAdmin = isHRAdmin(user.role);
-  // HR admins see every profile; anyone else only their own, read-only.
-  if (!isAdmin && user.employeeId !== id) notFound();
+  const guest = user.role === "GUEST";
+  // HR admins see every profile, guests every profile in the showcase company (read-only); anyone else only their own.
+  const canViewAny = canViewAsHR(user.role);
+  if (!canViewAny && user.employeeId !== id) notFound();
 
   const employee = await prisma.employee.findFirst({
     where: { id },
@@ -102,7 +105,7 @@ export default async function EmployeeProfilePage({
 
   return (
     <div className="space-y-6">
-      {isAdmin && (
+      {canViewAny && (
         <Link href="/dashboard/employees" className="inline-flex items-center gap-1.5 text-xs font-medium text-brand-700 hover:underline">
           <ArrowLeft className="w-3.5 h-3.5" aria-hidden /> Employee Directory
         </Link>
@@ -136,6 +139,7 @@ export default async function EmployeeProfilePage({
             )}
           </p>
         </div>
+        {guest && <GuestLockedButton className={clsx(secondaryButtonClass, "text-xs")}>Edit Profile</GuestLockedButton>}
         {isAdmin && (
           <Link href={`${profileHref}?edit=1`} scroll={false} className={clsx(secondaryButtonClass, "inline-flex items-center gap-2 text-xs")}>
             <Pencil className="w-3.5 h-3.5" aria-hidden /> Edit Profile
@@ -340,7 +344,7 @@ export default async function EmployeeProfilePage({
         />
       ) : null}
 
-      {editing && formOptions && (
+      {editing && formOptions && user.role !== "GUEST" && (
         <EditEmployeeModal
           key={editing.id}
           employee={editing}

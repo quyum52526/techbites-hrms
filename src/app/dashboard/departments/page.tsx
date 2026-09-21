@@ -2,10 +2,13 @@ import { prisma } from "@/lib/prisma";
 import { createDepartment, createDesignation } from "@/app/actions/departments";
 import { Building2, Briefcase, Plus, Users } from "lucide-react";
 import { getActiveCompanyId, employeeScope, departmentScope } from "@/lib/company";
-import { requireHRAdmin } from "@/lib/auth";
+import { requireHRView } from "@/lib/auth";
+import { GUEST_READ_ONLY_MESSAGE } from "@/lib/auth-shared";
 
 export default async function DepartmentsPage() {
-  await requireHRAdmin();
+  const user = await requireHRView();
+  // Guests see the forms greyed out: a disabled fieldset disables every control inside it.
+  const guest = user.role === "GUEST";
   const activeCompanyId = await getActiveCompanyId();
 
   const [departments, companies, designations] = await Promise.all([
@@ -34,7 +37,7 @@ export default async function DepartmentsPage() {
     <div className="space-y-6">
       <div>
         <h2 className="text-xl font-bold text-slate-800">Organization Structure</h2>
-        <p className="text-xs text-slate-500">Configure company divisions, teams, and job designations</p>
+        <p className="text-xs text-slate-500">{guest ? "Company divisions, teams, and job designations" : "Configure company divisions, teams, and job designations"}</p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -45,7 +48,8 @@ export default async function DepartmentsPage() {
               <Building2 className="w-4 h-4 text-brand-600" />
               <span>Create Department</span>
             </div>
-            <form action={createDepartment} className="space-y-3 text-xs">
+            <form action={createDepartment} className="text-xs">
+              <fieldset disabled={guest} title={guest ? GUEST_READ_ONLY_MESSAGE : undefined} className="min-w-0 space-y-3 disabled:cursor-not-allowed disabled:opacity-60">
               <div>
                 <label className="block text-slate-600 font-medium mb-1">Department Name *</label>
                 <input
@@ -84,6 +88,7 @@ export default async function DepartmentsPage() {
               >
                 <Plus className="w-4 h-4" /> Add Department
               </button>
+              </fieldset>
             </form>
           </div>
 
@@ -127,7 +132,8 @@ export default async function DepartmentsPage() {
               <Briefcase className="w-4 h-4 text-emerald-700" />
               <span>Create Designation</span>
             </div>
-            <form action={createDesignation} className="space-y-3 text-xs">
+            <form action={createDesignation} className="text-xs">
+              <fieldset disabled={guest} title={guest ? GUEST_READ_ONLY_MESSAGE : undefined} className="min-w-0 space-y-3 disabled:cursor-not-allowed disabled:opacity-60">
               <div>
                 <label className="block text-slate-600 font-medium mb-1">Designation Title *</label>
                 <input
@@ -153,6 +159,7 @@ export default async function DepartmentsPage() {
               >
                 <Plus className="w-4 h-4" /> Add Designation
               </button>
+              </fieldset>
             </form>
           </div>
 

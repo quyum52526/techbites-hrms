@@ -3,11 +3,11 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
-import { getActiveUser, isHRAdmin } from "@/lib/auth";
+import { getWritableUser, guestWriteResult, isHRAdmin, requireWriteAccess } from "@/lib/auth";
 import { getAccessibleCompanyIds } from "@/lib/company";
 
 async function assertHRAdmin() {
-  const user = await getActiveUser();
+  const user = await requireWriteAccess();
   if (!isHRAdmin(user.role)) throw new Error("You do not have permission to manage departments and designations");
   return user;
 }
@@ -82,7 +82,8 @@ export async function createDepartmentAction(input: {
   name: string;
   companyId?: string | null;
 }): Promise<QuickCreateResult<{ id: string; name: string; companyId: string | null }>> {
-  const user = await getActiveUser();
+  const user = await getWritableUser();
+  if (!user) return guestWriteResult;
   if (!isHRAdmin(user.role)) return { ok: false, error: "You do not have permission to create departments" };
 
   const cleaned = cleanName(input.name, "Department");
@@ -129,7 +130,8 @@ export async function createDepartmentAction(input: {
 
 /** Inline "+ New" designation. Designations are organisation-wide titles, not tied to a department. */
 export async function createDesignationAction(input: { name: string }): Promise<QuickCreateResult<{ id: string; title: string }>> {
-  const user = await getActiveUser();
+  const user = await getWritableUser();
+  if (!user) return guestWriteResult;
   if (!isHRAdmin(user.role)) return { ok: false, error: "You do not have permission to create designations" };
 
   const cleaned = cleanName(input.name, "Designation");

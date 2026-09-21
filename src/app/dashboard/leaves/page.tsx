@@ -57,7 +57,9 @@ export default async function LeavesPage({ searchParams }: { searchParams: Promi
   const statusFilter = activeFilter.value;
 
   const [user, activeCompanyId] = await Promise.all([getActiveUser(), getActiveCompanyId()]);
+  // Guests browse like HR (company scope, register tab) but never get approve/reject.
   const isApprover = canAccess(user.role, "hr");
+  const guest = user.role === "GUEST";
   const isLead = isTeamLead(user.role);
   const selfId = user.employeeId ?? "__no-employee__";
   // The register covers a whole company, so only HR sees it; anyone else asking for it gets the applications board.
@@ -72,7 +74,7 @@ export default async function LeavesPage({ searchParams }: { searchParams: Promi
   const canDecide = (status: LeaveStatus, employee: { managerId: string | null; manager: { managerId: string | null } | null }) =>
     (status === "PENDING_TL" && isLead && employee.managerId === selfId) ||
     (status === "PENDING_MANAGER" && user.role === "MANAGER" && employee.manager?.managerId === selfId) ||
-    (status === "PENDING_HR" && isApprover);
+    (status === "PENDING_HR" && isApprover && !guest);
 
   const [employees, leaveTypes] = await Promise.all([
     isApprover

@@ -3,7 +3,7 @@
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { LeaveStatus, Role } from "@prisma/client";
-import { canAccess, getActiveUser, isHRAdmin, isTeamLead } from "@/lib/auth";
+import { canAccess, canViewAsHR, getActiveUser, isTeamLead, requireWriteAccess } from "@/lib/auth";
 import { employeeScope, getAccessibleCompanyIds, getActiveCompanyId } from "@/lib/company";
 import { leaveDays } from "@/lib/leave-balance";
 import type { LeaveHistoryEntry } from "@/lib/leave-shared";
@@ -17,7 +17,7 @@ const isoDate = (date: Date) => date.toISOString().slice(0, 10);
 export async function getEmployeeLeaveHistory(employeeId: string): Promise<LeaveHistoryEntry[]> {
   const user = await getActiveUser();
   if (user.employeeId !== employeeId) {
-    if (!isHRAdmin(user.role)) throw new Error("You can only view your own leave history");
+    if (!canViewAsHR(user.role)) throw new Error("You can only view your own leave history");
     const employee = await prisma.employee.findUnique({ where: { id: employeeId }, select: { companyId: true } });
     const accessibleIds = await getAccessibleCompanyIds(user);
     if (!employee || (accessibleIds && !(employee.companyId && accessibleIds.includes(employee.companyId)))) {
@@ -56,7 +56,7 @@ export async function submitLeaveRequest(formData: FormData) {
   const endDate = new Date(formData.get("endDate") as string);
   const reason = formData.get("reason") as string;
 
-  const user = await getActiveUser();
+  const user = await requireWriteAccess();
   const isApprover = canAccess(user.role, "hr");
 
   // Non-approvers can only file leave for themselves, whatever the form posted.
@@ -101,7 +101,7 @@ export async function submitLeaveRequest(formData: FormData) {
  * manager is the next-level reviewer. HR/Super Admin only act at the final HR stage.
  */
 export async function updateLeaveStatus(requestId: string, status: "APPROVED" | "REJECTED") {
-  const user = await getActiveUser();
+  const user = await requireWriteAccess();
   const request = await prisma.leaveRequest.findUnique({
     where: { id: requestId },
     select: { status: true, employee: { select: { companyId: true, managerId: true, manager: { select: { managerId: true } } } } },

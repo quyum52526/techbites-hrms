@@ -5,6 +5,7 @@ import QuickPunch from "@/components/dashboard/QuickPunch";
 import StatCard from "@/components/dashboard/StatCard";
 import Link from "next/link";
 import { canAccess, getActiveUser } from "@/lib/auth";
+import { GuestLockedButton } from "@/components/ui/ReadOnly";
 import {
   NO_EMPLOYEES,
   canSwitchCompanyForUser,
@@ -34,7 +35,10 @@ export default async function DashboardPage() {
   const canDrillDown = user.role !== Role.MANAGER;
 
   const switcher = await canSwitchCompanyForUser(user);
-  const companyId = switcher ? await getActiveCompanyId() : await getOwnCompanyId(user.employeeId);
+  const guest = user.role === "GUEST";
+  // A guest has no employee record; their session carries the showcase company (getOwnCompanyId would return null,
+  // which means "every company").
+  const companyId = switcher || guest ? await getActiveCompanyId() : await getOwnCompanyId(user.employeeId);
   const hasNoCompany = !switcher && !companyId;
   const employeeWhere = hasNoCompany ? NO_EMPLOYEES : employeeScope(companyId);
   const workforceWhere = hasNoCompany ? NO_EMPLOYEES : workforceScope(companyId);
@@ -89,7 +93,10 @@ export default async function DashboardPage() {
           <h1 className="text-xl font-bold text-slate-900">HR Operations Overview</h1>
           <p className="text-xs text-slate-600">Real-time workforce snapshot and quick actions</p>
         </div>
-        {isHr && (
+        {guest && (
+          <GuestLockedButton className="bg-brand-gradient text-white text-xs font-semibold px-4 py-2.5 rounded-lg shadow-sm">Add Employee</GuestLockedButton>
+        )}
+        {isHr && !guest && (
           <Link
             href="/dashboard/employees"
             className="flex items-center gap-2 bg-brand-gradient text-white text-xs font-semibold px-4 py-2.5 rounded-lg shadow-sm transition-shadow duration-200 hover:shadow-md"
@@ -175,7 +182,9 @@ export default async function DashboardPage() {
             <div>
               <h2 className="text-sm font-bold text-slate-900">Web punch unavailable</h2>
               <p className="text-xs text-slate-600 mt-1">
-                Your login is not linked to an employee record, so there is no attendance to mark.
+                {guest
+                  ? "Guest Mode is read-only, so there is no attendance to mark."
+                  : "Your login is not linked to an employee record, so there is no attendance to mark."}
               </p>
             </div>
           </section>

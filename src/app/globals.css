@@ -109,6 +109,37 @@
 }
 
 /*
+ * Dark sign-in surface (#0d1527 page, #131d35 card). Scoped overrides so inputs, autofill, placeholders and focus
+ * rings read on navy; the rest of the app stays light-only. slate-400 placeholder on #131d35 is 6.9:1.
+ */
+@layer base {
+  .auth-dark {
+    color-scheme: dark;
+  }
+  .auth-dark input {
+    color: var(--color-slate-100);
+  }
+  .auth-dark ::placeholder {
+    color: var(--color-slate-400);
+  }
+  .auth-dark :focus-visible {
+    outline-color: var(--color-brand-400);
+  }
+  .auth-dark input::selection {
+    background-color: var(--color-brand-800);
+    color: var(--color-white);
+  }
+  .auth-dark input:-webkit-autofill,
+  .auth-dark input:-webkit-autofill:hover,
+  .auth-dark input:-webkit-autofill:focus,
+  .auth-dark input:-webkit-autofill:active {
+    -webkit-box-shadow: 0 0 0 30px #0d1527 inset;
+    -webkit-text-fill-color: var(--color-slate-100);
+    caret-color: var(--color-slate-100);
+  }
+}
+
+/*
  * Native <dialog> surfaces (Modal, mobile nav drawer). Entry animates via @starting-style; exit is instant
  * (exit-faster-than-enter), and reduced-motion users get no movement.
  */

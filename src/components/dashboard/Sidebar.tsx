@@ -15,20 +15,20 @@ import {
   Gauge,
 } from "lucide-react";
 import { clsx } from "clsx";
-import type { Role } from "@prisma/client";
-import { PERFORMANCE_ROLES, roleLabels } from "@/lib/auth-shared";
+import { PERFORMANCE_ROLES, roleLabels, type SessionRole } from "@/lib/auth-shared";
 import { MobileNavDrawer } from "@/components/dashboard/MobileNav";
 
-export const navItems = [
-  { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard, roles: ["SUPER_ADMIN", "HR_ADMIN", "MANAGER", "TEAM_LEADER", "EMPLOYEE"] },
-  { label: "Employees", href: "/dashboard/employees", icon: Users, roles: ["SUPER_ADMIN", "HR_ADMIN"] },
-  { label: "Attendance", href: "/dashboard/attendance", icon: Clock, roles: ["SUPER_ADMIN", "HR_ADMIN", "MANAGER", "TEAM_LEADER", "EMPLOYEE"] },
-  { label: "Leave Requests", href: "/dashboard/leaves", icon: CalendarDays, roles: ["SUPER_ADMIN", "HR_ADMIN", "MANAGER", "TEAM_LEADER", "EMPLOYEE"] },
-  { label: "Payroll", href: "/dashboard/payroll", icon: CreditCard, roles: ["SUPER_ADMIN", "HR_ADMIN", "EMPLOYEE"] },
-  { label: "Departments", href: "/dashboard/departments", icon: Building2, roles: ["SUPER_ADMIN", "HR_ADMIN"] },
-  { label: "Reports & BI", href: "/dashboard/reports", icon: BarChart3, roles: ["SUPER_ADMIN", "HR_ADMIN", "MANAGER"] },
+// GUEST browses every page an HR admin can, read-only.
+export const navItems: { label: string; href: string; icon: typeof Users; roles: readonly SessionRole[] }[] = [
+  { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard, roles: ["SUPER_ADMIN", "HR_ADMIN", "MANAGER", "TEAM_LEADER", "EMPLOYEE", "GUEST"] },
+  { label: "Employees", href: "/dashboard/employees", icon: Users, roles: ["SUPER_ADMIN", "HR_ADMIN", "GUEST"] },
+  { label: "Attendance", href: "/dashboard/attendance", icon: Clock, roles: ["SUPER_ADMIN", "HR_ADMIN", "MANAGER", "TEAM_LEADER", "EMPLOYEE", "GUEST"] },
+  { label: "Leave Requests", href: "/dashboard/leaves", icon: CalendarDays, roles: ["SUPER_ADMIN", "HR_ADMIN", "MANAGER", "TEAM_LEADER", "EMPLOYEE", "GUEST"] },
+  { label: "Payroll", href: "/dashboard/payroll", icon: CreditCard, roles: ["SUPER_ADMIN", "HR_ADMIN", "EMPLOYEE", "GUEST"] },
+  { label: "Departments", href: "/dashboard/departments", icon: Building2, roles: ["SUPER_ADMIN", "HR_ADMIN", "GUEST"] },
+  { label: "Reports & BI", href: "/dashboard/reports", icon: BarChart3, roles: ["SUPER_ADMIN", "HR_ADMIN", "MANAGER", "GUEST"] },
   { label: "Performance", href: "/dashboard/performance", icon: Gauge, roles: PERFORMANCE_ROLES },
-  { label: "Settings", href: "/dashboard/settings", icon: Settings, roles: ["SUPER_ADMIN", "HR_ADMIN"] },
+  { label: "Settings", href: "/dashboard/settings", icon: Settings, roles: ["SUPER_ADMIN", "HR_ADMIN", "GUEST"] },
 ];
 
 function isActiveRoute(pathname: string, href: string) {
@@ -36,7 +36,7 @@ function isActiveRoute(pathname: string, href: string) {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
-type SidebarUser = { email: string; role: Role };
+type SidebarUser = { email: string; role: SessionRole };
 
 /** Brand, navigation and profile; shared by the desktop sidebar and the mobile drawer. */
 function SidebarPanel({ user }: { user: SidebarUser }) {

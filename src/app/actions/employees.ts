@@ -5,7 +5,8 @@ import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import bcrypt from "bcryptjs";
 import { randomUUID } from "node:crypto";
-import { assignableRoles, canChangeRole, getActiveUser, isHRAdmin, roleLabels } from "@/lib/auth";
+import { assignableRoles, canChangeRole, getWritableUser, guestWriteResult, isHRAdmin, roleLabels } from "@/lib/auth";
+import { GUEST_READ_ONLY_MESSAGE } from "@/lib/auth-shared";
 import { getAccessibleCompanyIds, getActiveCompanyId, WORKFORCE_STATUSES } from "@/lib/company";
 import { readCsvRecords } from "@/lib/csv";
 import { readUploadedCsv, type ImportIssue, type ImportResult } from "@/lib/import-result";
@@ -53,7 +54,8 @@ const parseRole = (value: FormDataEntryValue | null): Role | null =>
   typeof value === "string" && (ROLES as string[]).includes(value) ? (value as Role) : null;
 
 export async function createEmployee(formData: FormData): Promise<EmployeeActionResult> {
-  const user = await getActiveUser();
+  const user = await getWritableUser();
+  if (!user) return guestWriteResult;
   if (user.role !== Role.SUPER_ADMIN && user.role !== Role.HR_ADMIN) {
     return { ok: false, error: "You do not have permission to create employees" };
   }
@@ -176,7 +178,8 @@ const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 export async function importEmployeesCsv(formData: FormData): Promise<ImportResult> {
   const fail = (message: string, issues: ImportIssue[] = []): ImportResult => ({ ok: false, message, stats: [], issues });
 
-  const user = await getActiveUser();
+  const user = await getWritableUser();
+  if (!user) return fail(GUEST_READ_ONLY_MESSAGE);
   if (user.role !== Role.SUPER_ADMIN && user.role !== Role.HR_ADMIN) {
     return fail("You do not have permission to import employees");
   }
@@ -347,7 +350,8 @@ const EDITABLE_STATUSES: EmployeeStatus[] = [EmployeeStatus.ACTIVE, EmployeeStat
 const textField = (formData: FormData, name: string) => (formData.get(name) as string | null)?.trim() || null;
 
 export async function updateEmployee(employeeId: string, formData: FormData): Promise<EmployeeActionResult> {
-  const user = await getActiveUser();
+  const user = await getWritableUser();
+  if (!user) return guestWriteResult;
   if (!isHRAdmin(user.role)) {
     return { ok: false, error: "You do not have permission to edit employees" };
   }
@@ -497,7 +501,8 @@ export async function updateEmployee(employeeId: string, formData: FormData): Pr
  * Every amount is recomputed here, and the joining date is read from the employee record, never taken from the browser.
  */
 export async function releaseEmployee(employeeId: string, input: ReleaseInput): Promise<EmployeeActionResult> {
-  const user = await getActiveUser();
+  const user = await getWritableUser();
+  if (!user) return guestWriteResult;
   if (!isHRAdmin(user.role)) {
     return { ok: false, error: "You do not have permission to release employees" };
   }

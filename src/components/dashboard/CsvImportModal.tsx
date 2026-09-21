@@ -6,6 +6,10 @@ import { clsx } from "clsx";
 import { MAX_IMPORT_FILE_BYTES, type ImportResult } from "@/lib/import-result";
 import Modal, { ModalActions } from "@/components/ui/Modal";
 import { primaryButtonClass, secondaryButtonClass } from "@/components/ui/styles";
+import { GuestLockedButton, useReadOnly } from "@/components/ui/ReadOnly";
+
+const triggerClass =
+  "flex items-center gap-2 bg-white hover:bg-slate-50 text-slate-800 border border-control text-xs font-semibold px-4 py-2 rounded-lg shadow-sm transition-colors duration-200";
 
 interface Props {
   buttonLabel: string;
@@ -24,6 +28,7 @@ export default function CsvImportModal({ buttonLabel, title, description, column
   const [file, setFile] = useState<File | null>(null);
   const [result, setResult] = useState<ImportResult | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const readOnly = useReadOnly();
 
   const reset = () => {
     setFile(null);
@@ -56,13 +61,15 @@ export default function CsvImportModal({ buttonLabel, title, description, column
     }
   };
 
+  if (readOnly) return <GuestLockedButton className={triggerClass}>{buttonLabel}</GuestLockedButton>;
+
   return (
     <>
       <button
         type="button"
         onClick={() => setIsOpen(true)}
         aria-haspopup="dialog"
-        className="flex items-center gap-2 bg-white hover:bg-slate-50 text-slate-800 border border-control text-xs font-semibold px-4 py-2 rounded-lg shadow-sm transition-colors duration-200"
+        className={triggerClass}
       >
         <Upload className="w-4 h-4" aria-hidden /> {buttonLabel}
       </button>

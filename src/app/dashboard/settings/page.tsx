@@ -72,7 +72,8 @@ export default async function SettingsPage() {
           <dl className="divide-y divide-slate-100 text-xs">
             {[
               { term: "Company legal entity", value: "TechBites HRMS Global Ltd." },
-              { term: "Primary master administrator", value: adminUser?.email ?? "admin@techbites.com" },
+              // A guest is anonymous, so a real person's email is not shown to them.
+              { term: "Primary master administrator", value: user.role === "GUEST" ? "Hidden in Guest Mode" : (adminUser?.email ?? "admin@techbites.com") },
               { term: "Timezone & locale", value: "Asia/Dhaka (GMT+6)" },
             ].map((item) => (
               <div key={item.term} className="py-2.5 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-0.5">
@@ -117,7 +118,7 @@ export default async function SettingsPage() {
           <div className="text-xs text-slate-600 space-y-2">
             <p>• Multi-factor password encryption: <strong>Bcryptjs (10 Salt Rounds)</strong></p>
             <p>• Database SSL Connection: <strong>Enforced via Neon TLS Pooler</strong></p>
-            <p>• Session Role Isolation: <strong>Super Admin Role Active</strong></p>
+            <p>• Session Role Isolation: <strong>{user.role === "GUEST" ? "Guest Mode (read-only)" : "Super Admin Role Active"}</strong></p>
           </div>
         </div>
       </div>

@@ -6,6 +6,10 @@ import { submitLeaveRequest } from "@/app/actions/leaves";
 import Modal, { ModalActions } from "@/components/ui/Modal";
 import FormField from "@/components/ui/FormField";
 import { controlClass, primaryButtonClass, secondaryButtonClass } from "@/components/ui/styles";
+import { GuestLockedButton, useReadOnly } from "@/components/ui/ReadOnly";
+
+const triggerClass =
+  "flex items-center gap-2 bg-brand-600 hover:bg-brand-700 text-white text-xs font-semibold px-4 py-2 rounded-lg shadow-sm transition-colors duration-200";
 
 interface Props {
   employees: { id: string; firstName: string; lastName: string }[];
@@ -13,6 +17,7 @@ interface Props {
 }
 
 export default function ApplyLeaveModal({ employees, leaveTypes }: Props) {
+  const readOnly = useReadOnly();
   const [isOpen, setIsOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -39,13 +44,15 @@ export default function ApplyLeaveModal({ employees, leaveTypes }: Props) {
     }
   };
 
+  if (readOnly) return <GuestLockedButton className={triggerClass}>Apply for Leave</GuestLockedButton>;
+
   return (
     <>
       <button
         type="button"
         onClick={openModal}
         aria-haspopup="dialog"
-        className="flex items-center gap-2 bg-brand-600 hover:bg-brand-700 text-white text-xs font-semibold px-4 py-2 rounded-lg shadow-sm transition-colors duration-200"
+        className={triggerClass}
       >
         <CalendarPlus className="w-4 h-4" aria-hidden /> Apply for Leave
       </button>

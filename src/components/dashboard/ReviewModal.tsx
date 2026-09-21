@@ -8,6 +8,7 @@ import Modal, { ModalActions } from "@/components/ui/Modal";
 import FormField from "@/components/ui/FormField";
 import { ActionFeedback, SubmitButton, type ActionResult } from "@/components/ui/FormFeedback";
 import { controlClass, primaryButtonClass, secondaryButtonClass } from "@/components/ui/styles";
+import { GuestLockedButton, useReadOnly } from "@/components/ui/ReadOnly";
 
 type Metrics = { productivity: number; qualityOfWork: number; collaboration: number };
 
@@ -26,6 +27,7 @@ const METRICS = [
 ] as const;
 
 export default function ReviewModal({ cycleId, employeeId, employeeName, designation, review }: Props) {
+  const readOnly = useReadOnly();
   const [open, setOpen] = useState(false);
   const [metrics, setMetrics] = useState<Metrics>({ productivity: review?.productivity ?? 3, qualityOfWork: review?.qualityOfWork ?? 3, collaboration: review?.collaboration ?? 3 });
   const [feedback, setFeedback] = useState(review?.feedback ?? "");
@@ -57,6 +59,10 @@ export default function ReviewModal({ cycleId, employeeId, employeeName, designa
       }
     });
   };
+
+  if (readOnly) {
+    return <GuestLockedButton className={`${primaryButtonClass} whitespace-nowrap text-[11px]`}>{hasReview ? "Edit Rating" : "Review"}</GuestLockedButton>;
+  }
 
   return (
     <>

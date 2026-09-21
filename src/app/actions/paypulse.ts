@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { Role } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { getActiveUser } from "@/lib/auth";
+import { requireWriteAccess } from "@/lib/auth";
 import { summarizePayPulseDay, type PayPulseShiftRules } from "@/lib/paypulse-attendance-engine";
 
 const DEFAULT_RULES: PayPulseShiftRules = {
@@ -17,7 +17,7 @@ const DEFAULT_RULES: PayPulseShiftRules = {
 };
 
 export async function processPayPulsePunches(): Promise<{ processed: number; summaries: number; unmapped: string[] }> {
-  const user = await getActiveUser();
+  const user = await requireWriteAccess();
   if (user.role !== Role.SUPER_ADMIN && user.role !== Role.HR_ADMIN) throw new Error("You do not have permission to process attendance logs");
 
   const logs = await prisma.rawAttendanceLog.findMany({ where: { processed: false, ...(user.role === "SUPER_ADMIN" ? {} : { company_id: user.companyId ?? "__no-company__" }) }, orderBy: { punch_timestamp: "asc" } });

@@ -3,12 +3,12 @@
 import { Role } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
-import { getActiveUser } from "@/lib/auth";
+import { requireWriteAccess } from "@/lib/auth";
 
 export type SettingsActionResult = { ok: true; message: string } | { ok: false; error: string };
 
 async function requireSettingsAdmin() {
-  const user = await getActiveUser();
+  const user = await requireWriteAccess();
   if (user.role !== Role.SUPER_ADMIN && user.role !== Role.HR_ADMIN) {
     throw new Error("You do not have permission to change shift settings");
   }

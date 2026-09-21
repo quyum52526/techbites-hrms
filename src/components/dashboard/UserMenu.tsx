@@ -2,13 +2,12 @@
 
 import { useEffect, useId, useRef, useState } from "react";
 import { useFormStatus } from "react-dom";
-import type { Role } from "@prisma/client";
 import { Check, ChevronDown, Loader2, LogOut, Users } from "lucide-react";
 import { clsx } from "clsx";
 import { signOut, switchAccount } from "@/app/actions/auth";
-import { roleLabels } from "@/lib/auth-shared";
+import { roleLabels, type SessionRole } from "@/lib/auth-shared";
 
-export type MenuAccount = { id: string; email: string; role: Role; name: string | null };
+export type MenuAccount = { id: string; email: string; role: SessionRole; name: string | null };
 
 interface Props {
   user: MenuAccount;
@@ -16,15 +15,16 @@ interface Props {
   switchableAccounts: MenuAccount[] | null;
 }
 
-const roleBadgeClass: Record<Role, string> = {
+const roleBadgeClass: Record<SessionRole, string> = {
   SUPER_ADMIN: "bg-accent-50 text-accent-700",
   HR_ADMIN: "bg-brand-50 text-brand-700",
   MANAGER: "bg-amber-50 text-amber-800",
   TEAM_LEADER: "bg-emerald-50 text-emerald-700",
   EMPLOYEE: "bg-slate-100 text-slate-700",
+  GUEST: "bg-amber-50 text-amber-800",
 };
 
-function RoleBadge({ role }: { role: Role }) {
+function RoleBadge({ role }: { role: SessionRole }) {
   return (
     <span className={clsx("inline-flex px-2 py-0.5 rounded-full text-[10px] font-semibold tracking-wide whitespace-nowrap", roleBadgeClass[role])}>
       {roleLabels[role]}

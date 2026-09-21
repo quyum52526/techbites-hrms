@@ -12,6 +12,8 @@ export async function getAccessibleCompanyIds(user?: Awaited<ReturnType<typeof g
   const activeUser = user ?? (await getActiveUser());
   if (activeUser.role === Role.SUPER_ADMIN) return null;
   if (!activeUser.companyId) return [];
+  // A guest sees exactly the showcase company, never its sister concerns.
+  if (activeUser.role === "GUEST") return [activeUser.companyId];
   const company = await prisma.company.findUnique({ where: { id: activeUser.companyId }, select: { id: true, type: true } });
   if (!company) return [];
   if (company.type !== CompanyType.PARENT) return [company.id];
