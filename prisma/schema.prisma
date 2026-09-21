@@ -125,6 +125,7 @@ model Company {
   departments Department[]
   payrolls    PayrollRecord[]
   festivalBonusPolicies FestivalBonusPolicy[]
+  payrollDeductions PayrollDeduction[]
 }
 
 // ========================================
@@ -194,6 +195,7 @@ model Employee {
   leaveRequests    LeaveRequest[]
   salaryStructure  SalaryStructure?
   payrollRecords   PayrollRecord[]
+  payrollDeductions PayrollDeduction[]
   appraisalReviews AppraisalReview[]
   settlements      FinalSettlement[]
   files            StoredFile[]
@@ -357,6 +359,27 @@ model FestivalBonusPolicy {
   updatedAt    DateTime           @updatedAt
 
   @@unique([companyId, year])
+}
+
+/// One-off deductions for one employee in one payroll month, on top of the salary structure's tax/PF and
+/// attendance deductions. Entered per row or by CSV import.
+model PayrollDeduction {
+  id               String   @id @default(cuid())
+  employeeId       String
+  employee         Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  companyId        String   // employee's company when saved, so imports can be checked per company
+  company          Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  period           String   // "YYYY-MM", e.g. "2026-09"
+  advanceDeduction Float    @default(0) // recovery of a salary advance
+  demurrageClaim   Float    @default(0) // damages / penalty claimed from the employee
+  remarks          String?
+  updatedById      String?  // User who last saved it
+
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@unique([employeeId, period])
+  @@index([companyId, period])
 }
 
 model PayrollRecord {

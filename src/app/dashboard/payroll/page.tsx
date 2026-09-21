@@ -4,6 +4,7 @@ import { getActiveUser, isHRAdmin } from "@/lib/auth";
 import { employeeScopeForCompanies, getAccessibleCompanyIds } from "@/lib/company";
 import { festivalBonusFor, type FestivalBonusPolicyView } from "@/lib/festival-bonus";
 import { parsePeriodParam, periodDateRange, periodLabel, periodParam, type PayrollPeriod } from "@/lib/payroll";
+import { payrollTotals } from "@/lib/payroll-deductions";
 import FestivalBonusPanel from "@/components/dashboard/FestivalBonusPanel";
 import PayPulsePayrollTable, { type PayrollRow } from "@/components/dashboard/PayPulsePayrollTable";
 import PayrollPeriodPicker from "@/components/dashboard/PayrollPeriodPicker";
@@ -29,7 +30,7 @@ export default async function PayrollPage({ searchParams }: { searchParams: Prom
   });
   const companyIds = accessibleCompanyIds ?? companies.map(({ id }) => id);
 
-  const [employees, policyRecords] = await Promise.all([
+  const [employees, policyRecords, deductionRecords] = await Promise.all([
     prisma.employee.findMany({
       where: { ...employeeScopeForCompanies(companyIds), status: { in: [EmployeeStatus.ACTIVE, EmployeeStatus.PROBATION, EmployeeStatus.NOTICE_PERIOD] } },
       include: { company: { select: { id: true, name: true } }, department: true, salaryStructure: true, attendances: { where: { date: { gte: start, lte: end } }, select: { checkIn: true, checkOut: true, status: true } } },
@@ -39,7 +40,13 @@ export default async function PayrollPage({ searchParams }: { searchParams: Prom
       where: { year: period.year, companyId: { in: companyIds } },
       select: { companyId: true, year: true, targetBasis: true, percentage: true, payoutMonths: true, enabled: true },
     }),
+    prisma.payrollDeduction.findMany({
+      // By the employee's current company, so an entry follows an employee who later moves company.
+      where: { period: periodParam(period), employee: employeeScopeForCompanies(companyIds) },
+      select: { employeeId: true, advanceDeduction: true, demurrageClaim: true, remarks: true },
+    }),
   ]);
+  const deductionByEmployee = new Map(deductionRecords.map((deduction) => [deduction.employeeId, deduction]));
   const policies: FestivalBonusPolicyView[] = policyRecords;
   const policyByCompany = new Map(policies.map((policy) => [policy.companyId, policy]));
 
@@ -49,11 +56,19 @@ export default async function PayrollPage({ searchParams }: { searchParams: Prom
     const loggedHours = employee.attendances.reduce((total, attendance) => total + (attendance.checkIn && attendance.checkOut ? Math.max(0, attendance.checkOut.getTime() - attendance.checkIn.getTime()) / 3_600_000 : 0), 0);
     const absentDays = employee.attendances.filter((attendance) => attendance.status === "ABSENT").length;
     const allowances = (salary?.houseRent ?? 0) + (salary?.medicalAllow ?? 0) + (salary?.otherAllow ?? 0);
-    const deductions = (salary?.taxDeduction ?? 0) + (salary?.providentFund ?? 0) + basicSalary / 30 * absentDays;
+    // Tax, PF and unpaid-absence deduction; advance and demurrage come from this month's PayrollDeduction entry.
+    const baseDeductions = (salary?.taxDeduction ?? 0) + (salary?.providentFund ?? 0) + basicSalary / 30 * absentDays;
+    const oneOff = deductionByEmployee.get(employee.id);
     const regularGross = basicSalary + allowances;
     // Festival bonus from the employee's company policy; null outside its payout months or without a salary.
     const bonus = salary && employee.companyId ? festivalBonusFor(policyByCompany.get(employee.companyId), period, { basicSalary, regularEarnings: regularGross }) : null;
-    const gross = regularGross + (bonus?.amount ?? 0);
+    const totals = payrollTotals({
+      regularGross,
+      festivalBonus: bonus?.amount ?? 0,
+      baseDeductions,
+      advanceDeduction: oneOff?.advanceDeduction ?? 0,
+      demurrageClaim: oneOff?.demurrageClaim ?? 0,
+    });
     return {
       employeeId: employee.id,
       companyId: employee.companyId,
@@ -67,9 +82,13 @@ export default async function PayrollPage({ searchParams }: { searchParams: Prom
       regularGross,
       festivalBonus: bonus?.amount ?? 0,
       festivalBonusFormula: bonus?.label ?? null,
-      gross,
-      deductions,
-      net: Math.max(0, gross - deductions),
+      gross: totals.gross,
+      baseDeductions,
+      advanceDeduction: oneOff?.advanceDeduction ?? 0,
+      demurrageClaim: oneOff?.demurrageClaim ?? 0,
+      deductionRemarks: oneOff?.remarks ?? null,
+      deductions: totals.totalDeductions,
+      net: totals.net,
       status: "PENDING" as const,
     };
   });
@@ -84,7 +103,7 @@ export default async function PayrollPage({ searchParams }: { searchParams: Prom
         <PayrollPeriodPicker value={periodParam(period)} />
       </div>
       <FestivalBonusPanel companies={companies} policies={policies} period={period} canConfigure={isHRAdmin(user.role)} />
-      <PayPulsePayrollTable rows={rows} companies={companies} month={periodParam(period)} />
+      <PayPulsePayrollTable rows={rows} companies={companies} month={periodParam(period)} canEditDeductions={isHRAdmin(user.role)} />
     </div>
   );
 }
