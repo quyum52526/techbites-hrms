@@ -66,6 +66,12 @@ enum PayrollStatus {
   PAID
 }
 
+/// What a festival bonus percentage is applied to.
+enum FestivalBonusBasis {
+  BASIC          // basic salary only
+  TOTAL_EARNINGS // regular gross: basic + house rent + medical + other allowances
+}
+
 enum AppraisalPeriod {
   MONTHLY
   QUARTERLY
@@ -118,6 +124,7 @@ model Company {
   employees   Employee[]
   departments Department[]
   payrolls    PayrollRecord[]
+  festivalBonusPolicies FestivalBonusPolicy[]
 }
 
 // ========================================
@@ -331,6 +338,25 @@ model SalaryStructure {
 
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
+}
+
+/// A company's festival bonus rule for one year. The bonus is added to pay only in `payoutMonths`
+/// (e.g. the two Eid months), so the same policy is inactive in every other payroll month.
+model FestivalBonusPolicy {
+  id           String             @id @default(cuid())
+  companyId    String
+  company      Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  year         Int
+  targetBasis  FestivalBonusBasis @default(BASIC)
+  percentage   Float              // e.g. 50 = 50% of the basis
+  payoutMonths Int[]              // 1–12
+  enabled      Boolean            @default(true)
+  updatedById  String?            // User who last saved it
+
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+
+  @@unique([companyId, year])
 }
 
 model PayrollRecord {

@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 
-type PayrollRow = {
+export type PayrollRow = {
   employeeId: string;
   companyId: string | null;
   company: string;
@@ -12,6 +12,13 @@ type PayrollRow = {
   payModel: "MONTHLY" | "HOURLY";
   loggedValue: number;
   loggedUnit: string;
+  /** Basic + allowances, before the festival bonus. */
+  regularGross: number;
+  /** 0 when no bonus is paid this month. */
+  festivalBonus: number;
+  /** e.g. "50% of Basic"; null when no bonus is paid this month. */
+  festivalBonusFormula: string | null;
+  /** regularGross + festivalBonus */
   gross: number;
   deductions: number;
   net: number;
@@ -38,8 +45,8 @@ export default function PayPulsePayrollTable({ rows, companies, month }: { rows:
   }), [rows, search, companyId, department, payModel]);
 
   function exportCsv() {
-    const header = ["Employee Code", "Name", "Company", "Department", "Pay Model", "Logged Metrics", "Gross", "Deductions", "Net Payable", "Status"];
-    const body = filtered.map((row) => [row.code, row.name, row.company, row.department, row.payModel, `${row.loggedValue} ${row.loggedUnit}`, row.gross, row.deductions, row.net, row.status]);
+    const header = ["Employee Code", "Name", "Company", "Department", "Pay Model", "Logged Metrics", "Regular Gross", "Festival Bonus", "Bonus Formula", "Gross Earnings", "Deductions", "Net Payable", "Status"];
+    const body = filtered.map((row) => [row.code, row.name, row.company, row.department, row.payModel, `${row.loggedValue} ${row.loggedUnit}`, row.regularGross, row.festivalBonus, row.festivalBonusFormula ?? "", row.gross, row.deductions, row.net, row.status]);
     const csv = [header, ...body].map((line) => line.map((value) => `"${String(value).replaceAll('"', '""')}"`).join(",")).join("\n");
     const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
     const anchor = document.createElement("a");
@@ -69,11 +76,11 @@ export default function PayPulsePayrollTable({ rows, companies, month }: { rows:
       </div>
 
       <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
-        <table className="w-full min-w-[900px] text-left text-xs">
-          <thead className="bg-slate-900 text-white"><tr>{["Employee Code", "Name", "Company", "Department", "Pay Model", "Logged Metrics", "Gross Earnings", "Deductions", "Net Payable", "Status"].map((label) => <th key={label} className="whitespace-nowrap px-4 py-3 font-semibold">{label}</th>)}</tr></thead>
+        <table className="w-full min-w-[1040px] text-left text-xs">
+          <thead className="bg-slate-900 text-white"><tr>{["Employee Code", "Name", "Company", "Department", "Pay Model", "Logged Metrics", "Festival Bonus", "Gross Earnings", "Deductions", "Net Payable", "Status"].map((label) => <th key={label} className="whitespace-nowrap px-4 py-3 font-semibold">{label}</th>)}</tr></thead>
           <tbody className="divide-y divide-slate-100">
-            {filtered.length === 0 ? <tr><td colSpan={10} className="px-4 py-10 text-center text-slate-500">No employees match your filters.</td></tr> : filtered.map((row, index) => <tr key={row.employeeId} className={index % 2 ? "bg-slate-50" : "bg-white"}>
-              <td className="px-4 py-3 font-mono text-slate-900">{row.code}</td><td className="px-4 py-3 font-semibold text-slate-900">{row.name}</td><td className="px-4 py-3 text-slate-600">{row.company}</td><td className="px-4 py-3 text-slate-600">{row.department}</td><td className="px-4 py-3"><span className="rounded-full bg-slate-100 px-2 py-1 font-semibold text-slate-700">{row.payModel}</span></td><td className="px-4 py-3 font-mono text-slate-900">{row.loggedValue} {row.loggedUnit}</td><td className="px-4 py-3 text-slate-900">{money(row.gross)}</td><td className="px-4 py-3 text-rose-700">{money(row.deductions)}</td><td className="px-4 py-3 font-bold text-slate-900">{money(row.net)}</td><td className="px-4 py-3"><span className="rounded-full bg-amber-50 px-2 py-1 font-semibold text-amber-700">Pending</span></td>
+            {filtered.length === 0 ? <tr><td colSpan={11} className="px-4 py-10 text-center text-slate-500">No employees match your filters.</td></tr> : filtered.map((row, index) => <tr key={row.employeeId} className={index % 2 ? "bg-slate-50" : "bg-white"}>
+              <td className="px-4 py-3 font-mono text-slate-900">{row.code}</td><td className="px-4 py-3 font-semibold text-slate-900">{row.name}</td><td className="px-4 py-3 text-slate-600">{row.company}</td><td className="px-4 py-3 text-slate-600">{row.department}</td><td className="px-4 py-3"><span className="rounded-full bg-slate-100 px-2 py-1 font-semibold text-slate-700">{row.payModel}</span></td><td className="px-4 py-3 font-mono text-slate-900">{row.loggedValue} {row.loggedUnit}</td><td className="px-4 py-3">{row.festivalBonusFormula ? <div className="flex flex-col items-start gap-1"><span className="font-semibold text-slate-900 whitespace-nowrap">{money(row.festivalBonus)}</span><span className="rounded-full bg-accent-50 px-2 py-0.5 text-[10px] font-semibold text-accent-700 whitespace-nowrap">{row.festivalBonusFormula}</span></div> : <span className="text-slate-500" aria-label="No festival bonus">–</span>}</td><td className="px-4 py-3 text-slate-900">{money(row.gross)}</td><td className="px-4 py-3 text-rose-700">{money(row.deductions)}</td><td className="px-4 py-3 font-bold text-slate-900">{money(row.net)}</td><td className="px-4 py-3"><span className="rounded-full bg-amber-50 px-2 py-1 font-semibold text-amber-700">Pending</span></td>
             </tr>)}
           </tbody>
         </table>
